@@ -1,0 +1,129 @@
+version: '3'
+
+env:
+  UV_CACHE_DIR: '{{.TASKFILE_DIR}}/.uv-cache'
+
+vars:
+  BACKEND_DIR: backend
+  FRONTEND_DIR: frontend
+
+tasks:
+  setup:
+    desc: Install backend and frontend dependencies
+    cmds:
+      - uv sync --directory {{.BACKEND_DIR}} --dev
+      - npm install --prefix {{.FRONTEND_DIR}}
+
+  vision:setup:
+    desc: Install MediaPipe, OpenCV, and Ultralytics YOLO dependencies
+    cmds:
+      - uv sync --directory {{.BACKEND_DIR}} --dev --group vision
+      - task: vision:models
+
+  vision:models:
+    desc: Download the MediaPipe Hand Landmarker model
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - uv run --group vision python -m vision.download_models
+
+  vision:dev:
+    desc: Run tray-camera hand and object detection with preview
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - uv run --group vision python -m vision.run --preview {{.CLI_ARGS}}
+
+  dev:
+    desc: Run the API and web client together
+    deps: [backend:dev, frontend:dev]
+
+  test:
+    desc: Run backend tests and frontend checks
+    cmds:
+      - task: backend:test
+      - task: frontend:check
+
+  format:
+    desc: Format and fix backend source
+    cmds:
+      - uv run --directory {{.BACKEND_DIR}} ruff format .
+      - uv run --directory {{.BACKEND_DIR}} ruff check --fix .
+
+  backend:dev:
+    desc: Run FastAPI with reload
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+  backend:test:
+    desc: Run backend tests and lint
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - uv run ruff check .
+      - uv run pytest -m unit
+      - uv run pytest -m integration
+
+  backend:test:unit:
+    desc: Run isolated backend unit tests
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - uv run pytest -m unit
+
+  backend:test:integration:
+    desc: Run backend API and persistence integration tests
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - uv run pytest -m integration
+
+  frontend:dev:
+    desc: Run the Vite development server
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npm run dev
+
+  frontend:check:
+    desc: Lint and build the frontend
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npm run lint
+      - npm run build
+
+  clean:
+    desc: Remove generated application data and build output
+    cmds:
+      - rm -rf backend/data frontend/dist
+
+  docker:build:
+    desc: Build the frontend and backend container images
+    cmds:
+      - docker compose build
+
+  docker:up:
+    desc: Build and run both containers
+    cmds:
+      - docker compose up --build -d
+
+  docker:down:
+    desc: Stop both containers without deleting stored data
+    cmds:
+      - docker compose down
+
+  docker:logs:
+    desc: Follow logs from both containers
+    cmds:
+      - docker compose logs -f
+
+  docker:vision-models:
+    desc: Download MediaPipe model into the persistent Docker volume
+    cmds:
+      - docker compose exec backend python -m vision.download_models
+
+  docker:vision:
+    desc: Run tray vision inside the backend container on Linux hosts
+    cmds:
+      - docker compose exec backend python -m vision.run --api http://localhost:8000 {{.CLI_ARGS}}
+
+  docker:reset:
+    desc: Stop containers and delete the persistent data volume
+    prompt: This permanently deletes recordings and database data. Continue?
+    cmds:
+      - docker compose down --volumes

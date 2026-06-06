@@ -1,0 +1,43 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      FRAGMENTED_SUNSHINE_DATA_DIR: /data
+      CORS_ORIGINS: http://localhost:8080
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      HAND_LANDMARKER_MODEL: /data/models/hand_landmarker.task
+      YOLO_MODEL: ${YOLO_MODEL:-yolo11n.pt}
+      VISION_OBJECT_MAP: '${VISION_OBJECT_MAP:-}'
+      TRAY_ROI: ${TRAY_ROI:-0.08,0.08,0.92,0.92}
+    volumes:
+      - fragmented_sunshine_data:/data
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-8080}:80"
+    restart: unless-stopped
+
+volumes:
+  fragmented_sunshine_data:
