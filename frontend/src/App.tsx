@@ -143,7 +143,10 @@ export default function App() {
     <main>
       <header>
         <p className="eyebrow">Interactive memory archive</p>
-        <h1>Fragmented Sunshine<br />of the Spotless Mind</h1>
+        <h1>
+          <span>Fragmented Sunshine</span>
+          <span>of the Spotless Mind</span>
+        </h1>
         <p className="clock">{new Date().getFullYear()} / Installation console</p>
       </header>
 
