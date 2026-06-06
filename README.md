@@ -1,4 +1,4 @@
-# Fragmented Sunshine
+# Fragmented Sunshine of the Spotless Mind
 
 A browser-based installation console and FastAPI media service for recording, segmenting, and progressively rearranging object-linked memories.
 
