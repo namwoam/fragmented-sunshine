@@ -161,6 +161,24 @@ def update_object_location(object_id: str, payload: ObjectLocationUpdate):
     return dict(row)
 
 
+@app.delete("/api/objects/{object_id}/location")
+def reset_object_location(object_id: str):
+    with database.connection() as connection:
+        if not connection.execute(
+            "SELECT 1 FROM objects WHERE object_id = ?", (object_id,)
+        ).fetchone():
+            raise HTTPException(404, "Object not found")
+        connection.execute(
+            "UPDATE objects SET location_x = NULL, location_y = NULL, touch_radius = 0.08 "
+            "WHERE object_id = ?",
+            (object_id,),
+        )
+        row = connection.execute(
+            "SELECT * FROM objects WHERE object_id = ?", (object_id,)
+        ).fetchone()
+    return dict(row)
+
+
 @app.post("/api/recordings", status_code=201)
 def create_recording(
     object_id: str = Form(),

@@ -23,16 +23,27 @@ h1 span { display: block; white-space: nowrap; }
 .section-heading { display: flex; gap: 13px; align-items: baseline; padding-bottom: 12px; border-bottom: 1px solid #aaa69d; }
 .section-heading h2 { margin: 0; font-size: 14px; font-weight: 500; }
 .object-list { margin-top: 12px; }
-.object { width: 100%; border: 0; border-bottom: 1px solid #cfcbc2; background: transparent; text-align: left; padding: 15px 4px; display: grid; grid-template-columns: 27px 1fr; cursor: pointer; opacity: .55; }
-.object.active { opacity: 1; }
-.object.active strong::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 8px; border-radius: 50%; background: #f06c3c; }
+.object-card { position: relative; border-bottom: 1px solid #cfcbc2; opacity: .55; }
+.object-card.active, .object-card.dwelling { opacity: 1; }
+.object { width: 100%; border: 0; background: transparent; text-align: left; padding: 15px 4px 10px; display: grid; grid-template-columns: 27px 1fr; cursor: pointer; }
+.object-card.active .object strong::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 8px; border-radius: 50%; background: #f06c3c; }
 .object span, .object small { font: 9px 'DM Mono', monospace; color: #77736b; }
 .object strong { font-size: 13px; font-weight: 500; }
 .object small { grid-column: 2; margin-top: 4px; }
 .object .location-status { color: #5f7d63; }
 .object .location-status.missing { color: #ad3e25; }
-.object.dwelling { opacity: 1; background: rgba(240, 108, 60, .08); }
-.object .object-countdown { color: #ad3e25; font-weight: 500; }
+.object-card.dwelling { background: rgba(240, 108, 60, .08); }
+.object-reset { margin: 0 4px 10px 31px; padding: 0; border: 0; background: transparent; color: #77736b; font: 8px 'DM Mono', monospace; text-transform: uppercase; cursor: pointer; }
+.object-reset:hover:not(:disabled) { color: #ad3e25; }
+.object-reset:disabled { opacity: .3; cursor: not-allowed; }
+.object-progress { grid-column: 1 / -1; display: grid; gap: 5px; margin-top: 9px; color: #ad3e25; }
+.object-progress-copy { display: flex; justify-content: space-between; align-items: baseline; }
+.object-progress-copy small { grid-column: auto; margin: 0; color: inherit; }
+.object-progress-copy strong { font: 11px 'DM Mono', monospace; }
+.object-progress-track { display: block; height: 4px; overflow: hidden; background: #cfcbc2; }
+.object-progress-track > span { display: block; height: 100%; background: #f06c3c; transition: width .1s linear; }
+.object-progress.right { color: #356e9f; }
+.object-progress.right .object-progress-track > span { background: #67a9e5; }
 .text-button { margin-top: 18px; padding: 0; border: 0; background: transparent; font: 10px 'DM Mono', monospace; cursor: pointer; }
 .registration-actions { display: grid; justify-items: start; }
 .registration-actions .text-button:disabled { opacity: .35; cursor: not-allowed; }
@@ -56,14 +67,6 @@ h1 span { display: block; white-space: nowrap; }
 .status-orbit.recording .pulse { background: #f06c3c; border-color: #f06c3c; animation: pulse 1.2s infinite; }
 .status-orbit strong, .status-orbit small { display: block; }
 .status-orbit strong { font-size: 13px; font-weight: 500; }
-.dwell-countdown { position: absolute; z-index: 4; display: flex; align-items: center; gap: 18px; padding: 18px 22px; color: #25231f; background: rgba(246, 243, 235, .94); border: 1px solid #f06c3c; box-shadow: 0 12px 40px rgba(37, 35, 31, .18); }
-.dwell-countdown > div:last-child { min-width: 165px; }
-.dwell-countdown small, .dwell-countdown strong, .dwell-countdown span { display: block; }
-.dwell-countdown > div:last-child strong { margin: 4px 0; font-size: 18px; font-weight: 500; }
-.dwell-countdown span { font: 10px 'DM Mono', monospace; color: #ad3e25; text-transform: uppercase; }
-.countdown-ring { width: 82px; height: 82px; border-radius: 50%; display: grid; place-content: center; text-align: center; background: radial-gradient(circle, #f6f3eb 58%, transparent 60%), conic-gradient(#f06c3c var(--dwell-progress), #cfcbc2 0); }
-.countdown-ring strong { font: 22px 'DM Mono', monospace; line-height: 1; }
-.countdown-ring small { margin-top: 3px; }
 .stage-copy { position: absolute; z-index: 3; left: 24px; right: 24px; bottom: 22px; display: flex; justify-content: space-between; align-items: end; color: #f5f2eb; mix-blend-mode: difference; }
 .stage-copy p { width: 260px; margin: 0; font-size: 13px; line-height: 1.5; }
 .stage-copy span { display: block; text-align: right; font: 9px 'DM Mono', monospace; text-transform: uppercase; }

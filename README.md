@@ -40,12 +40,12 @@ GitHub Actions runs three independent jobs on pushes and pull requests:
 
 CI installs only the standard backend development dependencies. MediaPipe, Ultralytics, model downloads, cameras, GPUs, and real API credentials are not required. Gemini responses are supplied by deterministic in-process fakes.
 
-Open `http://localhost:5173/debug` to inspect registered object locations, handedness, index fingertips, wrist movement vectors, and five-second activation events.
+Open `http://localhost:5173/debug` to inspect registered object locations, handedness, index fingertips, wrist movement vectors, and three-second activation events.
 The tray camera defaults to device index `0`; the backend recording-camera debug feed defaults to index `1`. Override them with `TRAY_CAMERA_INDEX` and `RECORDING_CAMERA_INDEX`, or pass `--camera` and `--recording-camera` to `task vision:dev --`.
 
 ## Tray vision
 
-The tray worker uses MediaPipe Hand Landmarker for handedness, index-fingertip position, wrist movement, and speed. Select an object in the installation console, choose **Set selected location**, and click its fixed position in the live tray image. Holding the left index fingertip in that region for five seconds starts or finishes recording; holding the right fingertip there for five seconds starts playback. If camera mirroring reverses handedness, start the worker with `task vision:dev -- --swap-handedness`.
+The tray worker uses MediaPipe Hand Landmarker for handedness, index-fingertip position, wrist movement, and speed. Select an object in the installation console, choose **Set selected location**, and click its fixed position in the live tray image. Holding the left index fingertip in that region for three seconds starts recording; moving it away stops recording. Holding the right fingertip there for three seconds starts playback. If camera mirroring reverses handedness, start the worker with `task vision:dev -- --swap-handedness`.
 
 ## Docker
 

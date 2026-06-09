@@ -23,6 +23,8 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(location),
     }),
+  resetObjectLocation: (objectId: string) =>
+    request<MemoryObject>(`/api/objects/${objectId}/location`, { method: 'DELETE' }),
   uploadRecording: (formData: FormData) =>
     request<{ recording_id: string }>('/api/recordings', { method: 'POST', body: formData }),
   processRecording: (recordingId: string) =>

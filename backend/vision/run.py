@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--fps", type=float, default=12)
     parser.add_argument("--preview-quality", type=int, default=65)
-    parser.add_argument("--dwell-seconds", type=float, default=5.0)
+    parser.add_argument("--dwell-seconds", type=float, default=3.0)
     parser.add_argument("--swap-handedness", action="store_true")
     parser.add_argument("--preview", action="store_true")
     return parser.parse_args()

@@ -14,7 +14,7 @@ class DwellState:
 
 @dataclass
 class InteractionStateManager:
-    dwell_seconds: float = 5.0
+    dwell_seconds: float = 3.0
     states: dict[tuple[str, str], DwellState] = field(default_factory=dict)
 
     def update(self, timestamp: float, hands: list[dict], objects: list[dict]) -> list[dict]:
@@ -44,7 +44,17 @@ class InteractionStateManager:
                     )
 
         for key in set(self.states) - active:
-            del self.states[key]
+            state = self.states.pop(key)
+            if state.fired:
+                object_id, handedness = key
+                events.append(
+                    {
+                        "event_type": "object_released",
+                        "timestamp": timestamp,
+                        "object_id": object_id,
+                        "handedness": handedness,
+                    }
+                )
         return events
 
     def progress(self, timestamp: float) -> list[dict]:

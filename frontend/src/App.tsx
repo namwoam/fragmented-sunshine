@@ -9,8 +9,8 @@ import type { InteractionState, MemoryObject, Playback, VisionEvent } from './ty
 import './styles.css'
 
 const stateCopy: Record<InteractionState, { label: string; detail: string }> = {
-  on_tray: { label: 'Waiting', detail: 'Touch an object location for five seconds with either hand.' },
-  recording: { label: 'Remembering', detail: 'Touch the location with your left hand again to finish.' },
+  on_tray: { label: 'Waiting', detail: 'Touch an object location for three seconds with either hand.' },
+  recording: { label: 'Remembering', detail: 'Keep touching the object location. Move your left hand away to finish.' },
   processing: { label: 'Settling', detail: 'The memory is being divided into fragments.' },
   playing: { label: 'Reappearing', detail: 'A familiar memory returns in a changed order.' },
   unavailable: { label: 'Offline', detail: 'The server could not be reached. Your recording remains in this browser.' },
@@ -108,10 +108,11 @@ export default function App() {
     }
   }
 
-  const finishPlayback = useCallback(async () => {
-    if (playback) await api.savePlayback(playback).catch(() => undefined)
+  const finishPlayback = useCallback(() => {
+    const completedPlayback = playback
     setPlayback(null)
     setState('on_tray')
+    if (completedPlayback) void api.savePlayback(completedPlayback).catch(() => undefined)
   }, [playback])
 
   function handleVisionEvent(event: VisionEvent) {
@@ -127,9 +128,10 @@ export default function App() {
       if (event.handedness === 'right') void beginPlayback(event.object_id)
     }
     if (
-      event.event_type === 'object_activated'
+      event.event_type === 'object_released'
       && event.handedness === 'left'
       && stateRef.current === 'recording'
+      && event.object_id === recordingObjectId.current
     ) {
       void finishRecording()
     }
@@ -139,12 +141,18 @@ export default function App() {
 
   const selected = objects.find((object) => object.object_id === selectedId)
   const status = stateCopy[state]
-  const activeDwell = vision.lastFrame?.dwells?.reduce((current, dwell) =>
-    !current || dwell.progress > current.progress ? dwell : current, vision.lastFrame.dwells[0])
-  const dwellObject = objects.find((object) => object.object_id === activeDwell?.object_id)
-  const dwellAction = activeDwell?.handedness === 'left'
-    ? state === 'recording' ? 'Finish recording' : 'Start recording'
-    : 'Start playback'
+  const activeDwells = vision.lastFrame?.dwells ?? []
+
+  async function resetObjectLocation(objectId: string) {
+    try {
+      const resetObject = await api.resetObjectLocation(objectId)
+      setObjects((items) => items.map((item) =>
+        item.object_id === objectId ? resetObject : item))
+      setMessage(`${resetObject.display_name} touch location reset.`)
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : 'Could not reset object location')
+    }
+  }
 
   return (
     <main>
@@ -161,28 +169,49 @@ export default function App() {
         <aside>
           <div className="section-heading"><span>01</span><h2>Object</h2></div>
           <div className="object-list">
-            {objects.map((object, index) => (
-              <button
-                key={object.object_id}
-                className={`${selectedId === object.object_id ? 'object active' : 'object'}${activeDwell?.object_id === object.object_id ? ' dwelling' : ''}`}
-                onClick={() => setSelectedId(object.object_id)}
-                disabled={state !== 'on_tray'}
-              >
-                <span>{String(index + 1).padStart(2, '0')}</span>
-                <strong>{object.display_name}</strong>
-                <small>{object.class_name.replaceAll('_', ' ')}</small>
-                <small className={object.location_x == null ? 'location-status missing' : 'location-status'}>
-                  {object.location_x != null && object.location_y != null
-                    ? `touch ${object.location_x.toFixed(2)}, ${object.location_y.toFixed(2)} / r ${object.touch_radius.toFixed(2)}`
-                    : 'touch location not set'}
-                </small>
-                {activeDwell?.object_id === object.object_id && (
-                  <small className="object-countdown">
-                    {activeDwell.handedness} hand / {activeDwell.remaining_seconds.toFixed(1)}s
-                  </small>
-                )}
-              </button>
-            ))}
+            {objects.map((object, index) => {
+              const objectDwells = activeDwells.filter((dwell) => dwell.object_id === object.object_id)
+              return (
+                <div
+                  key={object.object_id}
+                  className={`${selectedId === object.object_id ? 'object-card active' : 'object-card'}${objectDwells.length ? ' dwelling' : ''}`}
+                >
+                  <button
+                    className="object"
+                    onClick={() => setSelectedId(object.object_id)}
+                    disabled={state !== 'on_tray'}
+                  >
+                    <span>{String(index + 1).padStart(2, '0')}</span>
+                    <strong>{object.display_name}</strong>
+                    <small>{object.class_name.replaceAll('_', ' ')}</small>
+                    <small className={object.location_x == null ? 'location-status missing' : 'location-status'}>
+                      {object.location_x != null && object.location_y != null
+                        ? `touch ${object.location_x.toFixed(2)}, ${object.location_y.toFixed(2)} / r ${object.touch_radius.toFixed(2)}`
+                        : 'touch location not set'}
+                    </small>
+                    {objectDwells.map((dwell) => (
+                      <span className={`object-progress ${dwell.handedness}`} key={dwell.handedness}>
+                        <span className="object-progress-copy">
+                          <small>{dwell.handedness} / {dwell.handedness === 'left' ? 'record' : 'playback'}</small>
+                          <strong>{dwell.remaining_seconds.toFixed(1)}s</strong>
+                        </span>
+                        <span className="object-progress-track" aria-hidden="true">
+                          <span style={{ width: `${dwell.progress * 100}%` }} />
+                        </span>
+                      </span>
+                    ))}
+                  </button>
+                  <button
+                    className="object-reset"
+                    onClick={() => void resetObjectLocation(object.object_id)}
+                    disabled={state !== 'on_tray' || object.location_x == null}
+                    aria-label={`Reset touch location for ${object.display_name}`}
+                  >
+                    Reset position + radius
+                  </button>
+                </div>
+              )
+            })}
           </div>
           <ObjectRegistration
             frameImage={vision.lastFrame?.frame_image ?? null}
@@ -202,25 +231,12 @@ export default function App() {
             <div><small>System state</small><strong>{status.label}</strong></div>
           </div>
 
-          {activeDwell && (
-            <div className="dwell-countdown" aria-live="polite">
-              <div
-                className="countdown-ring"
-                style={{ '--dwell-progress': `${activeDwell.progress * 360}deg` } as React.CSSProperties}
-              >
-                <strong>{Math.max(0, activeDwell.remaining_seconds).toFixed(1)}</strong>
-                <small>sec</small>
-              </div>
-              <div>
-                <small>{activeDwell.handedness} hand detected</small>
-                <strong>{dwellObject?.display_name ?? activeDwell.object_id}</strong>
-                <span>{dwellAction}</span>
-              </div>
-            </div>
-          )}
-
           {state === 'playing' && playback ? (
-            <PlaybackPlayer playback={playback} onComplete={finishPlayback} />
+            <PlaybackPlayer
+              key={`${playback.recording_id}-${playback.replay_count}`}
+              playback={playback}
+              onComplete={finishPlayback}
+            />
           ) : (
             <video
               className={state === 'recording' ? 'preview visible' : 'preview'}
@@ -242,11 +258,11 @@ export default function App() {
           <div className="section-heading"><span>02</span><h2>Gesture</h2></div>
           <button className="gesture left" onClick={() => void (state === 'recording' ? finishRecording() : startRecording())} disabled={!selectedId || !['on_tray', 'recording'].includes(state)}>
             <span className="hand">L</span>
-            <span><strong>{state === 'recording' ? 'Finish recording' : 'Left touch / 5 sec'}</strong><small>{state === 'recording' ? 'Store this memory' : 'Record a memory'}</small></span>
+            <span><strong>{state === 'recording' ? 'Move hand away' : 'Left touch / 3 sec'}</strong><small>{state === 'recording' ? 'Finish recording' : 'Record a memory'}</small></span>
           </button>
           <button className="gesture right" onClick={() => void beginPlayback()} disabled={!selectedId || state !== 'on_tray'}>
             <span className="hand">R</span>
-            <span><strong>Right touch / 5 sec</strong><small>Recall a memory</small></span>
+            <span><strong>Right touch / 3 sec</strong><small>Recall a memory</small></span>
           </button>
           <div className="vision-readout">
             <span className={vision.connected ? 'vision-dot connected' : 'vision-dot'} />
@@ -259,7 +275,7 @@ export default function App() {
               </small>
             </div>
           </div>
-          <p className="hint">MediaPipe tracks the index fingertip. Fixed object locations activate after five seconds of continuous touch.</p>
+          <p className="hint">MediaPipe tracks the index fingertip. Fixed object locations activate after three seconds of continuous touch.</p>
         </aside>
       </section>
 

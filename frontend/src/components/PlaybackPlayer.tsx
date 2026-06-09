@@ -8,6 +8,7 @@ type Props = {
 
 export function PlaybackPlayer({ playback, onComplete }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const completedRef = useRef(false)
   const [position, setPosition] = useState(0)
   const orderedSegments = useMemo(() => {
     const byId = new Map(playback.segments.map((segment) => [segment.segment_id, segment]))
@@ -16,10 +17,30 @@ export function PlaybackPlayer({ playback, onComplete }: Props) {
   const segment = orderedSegments[position]
 
   useEffect(() => {
+    if (segment || completedRef.current) return
+    completedRef.current = true
+    onComplete()
+  }, [segment, onComplete])
+
+  useEffect(() => {
     const video = videoRef.current
     if (!video || !segment) return
+    let advanced = false
+    const finishSegment = () => {
+      if (advanced) return
+      advanced = true
+      if (position + 1 < orderedSegments.length) {
+        setPosition((value) => value + 1)
+      } else if (!completedRef.current) {
+        completedRef.current = true
+        onComplete()
+      }
+    }
     const source = segment.media_url ?? playback.source_url
-    if (!source) return
+    if (!source) {
+      finishSegment()
+      return
+    }
 
     const fullSource = source
     if (video.getAttribute('src') !== fullSource) {
@@ -32,17 +53,18 @@ export function PlaybackPlayer({ playback, onComplete }: Props) {
     if (video.readyState >= 1) begin()
     else video.addEventListener('loadedmetadata', begin, { once: true })
 
-    const timer = window.setInterval(() => {
+    const checkProgress = () => {
       const finished = segment.media_url ? video.ended : video.currentTime >= segment.end_time
-      if (finished) {
-        if (position + 1 < orderedSegments.length) setPosition((value) => value + 1)
-        else {
-          window.clearInterval(timer)
-          onComplete()
-        }
-      }
-    }, 100)
-    return () => window.clearInterval(timer)
+      if (finished) finishSegment()
+    }
+    video.addEventListener('ended', finishSegment)
+    video.addEventListener('timeupdate', checkProgress)
+    const timer = window.setInterval(checkProgress, 100)
+    return () => {
+      window.clearInterval(timer)
+      video.removeEventListener('ended', finishSegment)
+      video.removeEventListener('timeupdate', checkProgress)
+    }
   }, [segment, position, orderedSegments.length, playback.source_url, onComplete])
 
   if (!segment) return <p className="empty">No playable fragments.</p>
@@ -57,4 +79,3 @@ export function PlaybackPlayer({ playback, onComplete }: Props) {
     </div>
   )
 }
-

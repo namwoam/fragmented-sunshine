@@ -31,7 +31,7 @@ export type Playback = {
 export type InteractionState = 'on_tray' | 'recording' | 'processing' | 'playing' | 'unavailable'
 
 export type VisionEvent = {
-  event_type: 'frame' | 'recording_frame' | 'object_activated'
+  event_type: 'frame' | 'recording_frame' | 'object_activated' | 'object_released'
   timestamp: number
   frame_image: string | null
   object_id: string | null

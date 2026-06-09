@@ -37,6 +37,12 @@ def test_objects_are_seeded(tmp_path):
         assert updated.json()["location_x"] == 0.4
         assert updated.json()["touch_radius"] == 0.09
 
+        reset = client.delete("/api/objects/perfume_01/location")
+        assert reset.status_code == 200
+        assert reset.json()["location_x"] is None
+        assert reset.json()["location_y"] is None
+        assert reset.json()["touch_radius"] == 0.08
+
 
 def test_recording_process_and_playback_flow(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake-ci-key")
