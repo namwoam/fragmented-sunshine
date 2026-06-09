@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useVisionEvents } from '../hooks/useVisionEvents'
 import type { VisionEvent } from '../types'
 
@@ -6,56 +6,12 @@ function percentage(value: number) {
   return `${Math.round(value * 100)}%`
 }
 
-function cameraUnavailableMessage() {
-  const mediaDevices = typeof navigator === 'undefined'
-    ? undefined
-    : (navigator as { mediaDevices?: MediaDevices }).mediaDevices
-  if (mediaDevices?.getUserMedia) return ''
-  return window.isSecureContext
-    ? 'Camera access is not supported by this browser.'
-    : 'Camera access requires HTTPS or localhost.'
-}
-
 export function VisionDebug() {
   const [lastEvent, setLastEvent] = useState<VisionEvent | null>(null)
-  const [recordingCameraError, setRecordingCameraError] = useState(cameraUnavailableMessage)
-  const recordingPreviewRef = useRef<HTMLVideoElement>(null)
   const vision = useVisionEvents((event) => {
-    if (event.event_type !== 'frame') setLastEvent(event)
+    if (!['frame', 'recording_frame'].includes(event.event_type)) setLastEvent(event)
   })
   const frame = vision.lastFrame
-
-  useEffect(() => {
-    let active = true
-    let stream: MediaStream | null = null
-    const mediaDevices = (navigator as { mediaDevices?: MediaDevices }).mediaDevices
-
-    if (!mediaDevices?.getUserMedia) {
-      return () => {
-        active = false
-      }
-    }
-
-    void mediaDevices.getUserMedia({ video: true, audio: false })
-      .then((nextStream) => {
-        if (!active) {
-          nextStream.getTracks().forEach((track) => track.stop())
-          return
-        }
-        stream = nextStream
-        if (recordingPreviewRef.current) recordingPreviewRef.current.srcObject = nextStream
-      })
-      .catch((reason) => {
-        if (active) {
-          setRecordingCameraError(reason instanceof Error ? reason.message : 'Recording camera is unavailable')
-        }
-      })
-
-    return () => {
-      active = false
-      stream?.getTracks().forEach((track) => track.stop())
-    }
-  }, [])
 
   return (
     <main className="debug-page">
@@ -122,8 +78,14 @@ export function VisionDebug() {
           <section className="debug-feed">
             <div className="section-heading"><span>02</span><h2>Recording camera</h2></div>
             <div className="debug-viewport">
-              <video ref={recordingPreviewRef} autoPlay muted playsInline />
-              {recordingCameraError && <p className="debug-empty">{recordingCameraError}</p>}
+              {vision.recordingFrame?.frame_image && (
+                <img src={vision.recordingFrame.frame_image} alt="Live recording camera" />
+              )}
+              {!vision.recordingFrame?.frame_image && (
+                <p className="debug-empty">
+                  Start `task vision:dev`; recording camera defaults to index 1.
+                </p>
+              )}
             </div>
           </section>
         </div>

@@ -16,6 +16,12 @@ from .interactions import InteractionStateManager, center_in_roi
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Tray hand and object vision service")
     parser.add_argument("--camera", type=int, default=int(os.getenv("TRAY_CAMERA_INDEX", "0")))
+    parser.add_argument(
+        "--recording-camera",
+        type=int,
+        default=int(os.getenv("RECORDING_CAMERA_INDEX", "1")),
+        help="Camera index streamed to the recording-camera debug feed",
+    )
     parser.add_argument("--api", default=os.getenv("VISION_API_URL", "http://localhost:8000"))
     parser.add_argument("--yolo-model", default=os.getenv("YOLO_MODEL", "yolo11n.pt"))
     parser.add_argument(
@@ -192,6 +198,14 @@ def main() -> None:
     camera = cv2.VideoCapture(args.camera)
     if not camera.isOpened():
         raise SystemExit(f"Could not open tray camera {args.camera}")
+    recording_camera = cv2.VideoCapture(args.recording_camera)
+    if not recording_camera.isOpened():
+        recording_camera.release()
+        recording_camera = None
+        print(
+            f"Warning: could not open recording camera {args.recording_camera}; "
+            "the recording debug feed will be unavailable."
+        )
 
     interval = 1 / args.fps
     with httpx.Client() as client:
@@ -213,6 +227,20 @@ def main() -> None:
                     "objects": objects,
                 }
                 publish(client, args.api, {"event_type": "frame", **base})
+                if recording_camera is not None:
+                    recording_success, recording_frame = recording_camera.read()
+                    if recording_success:
+                        publish(
+                            client,
+                            args.api,
+                            {
+                                "event_type": "recording_frame",
+                                "timestamp": timestamp,
+                                "frame_image": encode_preview(
+                                    recording_frame, args.preview_quality
+                                ),
+                            },
+                        )
                 for event in interactions.update(timestamp, hands, objects):
                     publish(client, args.api, {**event, "hands": hands, "objects": objects})
                 if args.preview:
@@ -222,6 +250,8 @@ def main() -> None:
                 time.sleep(max(0.0, interval - (time.monotonic() - loop_started)))
         finally:
             camera.release()
+            if recording_camera is not None:
+                recording_camera.release()
             hand_tracker.close()
             cv2.destroyAllWindows()
 

@@ -41,6 +41,7 @@ GitHub Actions runs three independent jobs on pushes and pull requests:
 CI installs only the standard backend development dependencies. MediaPipe, Ultralytics, model downloads, cameras, GPUs, and real API credentials are not required. Gemini responses are supplied by deterministic in-process fakes.
 
 Open `http://localhost:5173/debug` to inspect normalized bounding boxes, handedness, wrist movement vectors, confidence values, tray membership, and debounced lift/return events.
+The tray camera defaults to device index `0`; the backend recording-camera debug feed defaults to index `1`. Override them with `TRAY_CAMERA_INDEX` and `RECORDING_CAMERA_INDEX`, or pass `--camera` and `--recording-camera` to `task vision:dev --`.
 
 ## Tray vision
 

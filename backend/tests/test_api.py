@@ -109,3 +109,20 @@ def test_vision_event_is_forwarded_over_websocket(tmp_path):
         )
         assert response.status_code == 202
         assert websocket.receive_json()["event_type"] == "object_lifted"
+
+
+def test_recording_camera_frame_is_forwarded_over_websocket(tmp_path):
+    _, test_client = make_client(tmp_path)
+    with test_client as client, client.websocket_connect("/api/vision/events") as websocket:
+        response = client.post(
+            "/api/vision/events",
+            json={
+                "event_type": "recording_frame",
+                "timestamp": 1.0,
+                "frame_image": "data:image/jpeg;base64,dGVzdA==",
+            },
+        )
+        assert response.status_code == 202
+        event = websocket.receive_json()
+        assert event["event_type"] == "recording_frame"
+        assert event["frame_image"] == "data:image/jpeg;base64,dGVzdA=="

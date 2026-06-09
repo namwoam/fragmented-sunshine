@@ -5,6 +5,7 @@ export function useVisionEvents(onEvent: (event: VisionEvent) => void) {
   const callback = useRef(onEvent)
   const [connected, setConnected] = useState(false)
   const [lastFrame, setLastFrame] = useState<VisionEvent | null>(null)
+  const [recordingFrame, setRecordingFrame] = useState<VisionEvent | null>(null)
 
   useEffect(() => {
     callback.current = onEvent
@@ -18,10 +19,11 @@ export function useVisionEvents(onEvent: (event: VisionEvent) => void) {
     socket.onmessage = (message) => {
       const event = JSON.parse(message.data) as VisionEvent
       if (event.event_type === 'frame') setLastFrame(event)
+      if (event.event_type === 'recording_frame') setRecordingFrame(event)
       callback.current(event)
     }
     return () => socket.close()
   }, [])
 
-  return { connected, lastFrame }
+  return { connected, lastFrame, recordingFrame }
 }
