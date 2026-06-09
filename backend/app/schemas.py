@@ -7,10 +7,19 @@ class ObjectCreate(BaseModel):
     object_id: str = Field(pattern=r"^[a-zA-Z0-9_-]+$", max_length=80)
     class_name: str = Field(min_length=1, max_length=120)
     display_name: str = Field(min_length=1, max_length=120)
+    location_x: float = Field(ge=0, le=1)
+    location_y: float = Field(ge=0, le=1)
+    touch_radius: float = Field(default=0.08, ge=0.02, le=0.3)
 
 
 class ObjectResponse(ObjectCreate):
     created_at: datetime
+
+
+class ObjectLocationUpdate(BaseModel):
+    location_x: float = Field(ge=0, le=1)
+    location_y: float = Field(ge=0, le=1)
+    touch_radius: float = Field(default=0.08, ge=0.02, le=0.3)
 
 
 class SegmentResponse(BaseModel):
@@ -68,6 +77,8 @@ class HandDetection(BaseModel):
     movement_x: float
     movement_y: float
     speed: float
+    touch_x: float
+    touch_y: float
 
 
 class ObjectDetection(BaseModel):
@@ -78,6 +89,14 @@ class ObjectDetection(BaseModel):
     on_tray: bool
 
 
+class DwellProgress(BaseModel):
+    object_id: str
+    handedness: str
+    elapsed_seconds: float
+    remaining_seconds: float
+    progress: float
+
+
 class VisionEvent(BaseModel):
     event_type: str
     timestamp: float
@@ -86,3 +105,4 @@ class VisionEvent(BaseModel):
     handedness: str | None = None
     hands: list[HandDetection] = Field(default_factory=list)
     objects: list[ObjectDetection] = Field(default_factory=list)
+    dwells: list[DwellProgress] = Field(default_factory=list)

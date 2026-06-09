@@ -24,7 +24,7 @@ task test            # lint, test, and build
 task format          # format and autofix backend code
 task backend:dev     # API only
 task frontend:dev    # web client only
-task vision:setup    # install MediaPipe/YOLO11 and download hand model
+task vision:setup    # install MediaPipe/OpenCV and download hand model
 task vision:dev      # run tray-camera inference with a preview window
 task backend:test:unit         # CPU-only unit tests with mocked AI
 task backend:test:integration  # API, SQLite, media, and WebSocket integration tests
@@ -40,18 +40,12 @@ GitHub Actions runs three independent jobs on pushes and pull requests:
 
 CI installs only the standard backend development dependencies. MediaPipe, Ultralytics, model downloads, cameras, GPUs, and real API credentials are not required. Gemini responses are supplied by deterministic in-process fakes.
 
-Open `http://localhost:5173/debug` to inspect normalized bounding boxes, handedness, wrist movement vectors, confidence values, tray membership, and debounced lift/return events.
+Open `http://localhost:5173/debug` to inspect registered object locations, handedness, index fingertips, wrist movement vectors, and five-second activation events.
 The tray camera defaults to device index `0`; the backend recording-camera debug feed defaults to index `1`. Override them with `TRAY_CAMERA_INDEX` and `RECORDING_CAMERA_INDEX`, or pass `--camera` and `--recording-camera` to `task vision:dev --`.
 
 ## Tray vision
 
-The tray worker uses MediaPipe Hand Landmarker for handedness, landmarks, wrist movement, and speed. Ultralytics YOLO11 provides object boxes and classes. Configure the class-to-installation-object mapping in `.env`:
-
-```bash
-VISION_OBJECT_MAP={"bottle":"perfume_01","teddy bear":"plush_01","book":"card_01"}
-```
-
-Pretrained COCO classes are useful for setup, but a custom YOLO11 checkpoint is required for reliable distinction between the installation's actual perfume bottle, handwritten card, and plush toy. Point `YOLO_MODEL` to that checkpoint. `TRAY_ROI` contains normalized `x1,y1,x2,y2` coordinates; use `/debug` to calibrate it. If camera mirroring reverses handedness, start the worker with `task vision:dev -- --swap-handedness`.
+The tray worker uses MediaPipe Hand Landmarker for handedness, index-fingertip position, wrist movement, and speed. Select an object in the installation console, choose **Set selected location**, and click its fixed position in the live tray image. Holding the left index fingertip in that region for five seconds starts or finishes recording; holding the right fingertip there for five seconds starts playback. If camera mirroring reverses handedness, start the worker with `task vision:dev -- --swap-handedness`.
 
 ## Docker
 
@@ -74,7 +68,7 @@ On a Linux installation host, pass the tray camera into the backend container an
 6. A right-hand action retrieves a deterministic timeline whose disruption increases with replay count.
 7. With `ffmpeg`, physical clips are extracted. Without it, the browser plays the same timeline by seeking through the original media.
 
-The UI buttons are the demo interaction adapter. MediaPipe/YOLO hardware detection can invoke the same recording and playback actions when the installation vision process is connected.
+The UI buttons are the demo interaction adapter. MediaPipe fingertip dwell events invoke the same recording and playback actions when the installation vision process is connected.
 
 ## API
 

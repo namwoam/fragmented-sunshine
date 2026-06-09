@@ -38,16 +38,33 @@ export function VisionDebug() {
                 <rect className="tray-roi" x="80" y="60" width="840" height="630" />
                 <text x="92" y="85">CALIBRATED TRAY ROI</text>
                 {frame?.objects.map((object, index) => (
-                  <g key={`object-${index}`} className="object-box">
-                    <rect
-                      x={object.bbox.x1 * 1000}
-                      y={object.bbox.y1 * 750}
-                      width={(object.bbox.x2 - object.bbox.x1) * 1000}
-                      height={(object.bbox.y2 - object.bbox.y1) * 750}
+                  <g key={`object-${index}`} className={`object-box${frame.dwells?.some((dwell) => dwell.object_id === object.object_id) ? ' dwelling' : ''}`}>
+                    <ellipse
+                      cx={(object.bbox.x1 + object.bbox.x2) * 500}
+                      cy={(object.bbox.y1 + object.bbox.y2) * 375}
+                      rx={(object.bbox.x2 - object.bbox.x1) * 500}
+                      ry={(object.bbox.y2 - object.bbox.y1) * 375}
+                    />
+                    <circle
+                      className="object-center"
+                      cx={(object.bbox.x1 + object.bbox.x2) * 500}
+                      cy={(object.bbox.y1 + object.bbox.y2) * 375}
+                      r="5"
                     />
                     <text x={object.bbox.x1 * 1000} y={object.bbox.y1 * 750 - 9}>
                       {object.object_id ?? object.class_name} / {percentage(object.confidence)}
                     </text>
+                    {frame.dwells?.filter((dwell) => dwell.object_id === object.object_id).map((dwell) => (
+                      <text
+                        key={dwell.handedness}
+                        className="dwell-label"
+                        x={(object.bbox.x1 + object.bbox.x2) * 500}
+                        y={(object.bbox.y1 + object.bbox.y2) * 375 + (dwell.handedness === 'left' ? -12 : 18)}
+                        textAnchor="middle"
+                      >
+                        {dwell.handedness} / {dwell.remaining_seconds.toFixed(1)}s
+                      </text>
+                    ))}
                   </g>
                 ))}
                 {frame?.hands.map((hand, index) => (
@@ -59,6 +76,7 @@ export function VisionDebug() {
                       height={(hand.bbox.y2 - hand.bbox.y1) * 750}
                     />
                     <circle cx={hand.wrist_x * 1000} cy={hand.wrist_y * 750} r="6" />
+                    <circle className="touch-point" cx={hand.touch_x * 1000} cy={hand.touch_y * 750} r="9" />
                     <line
                       x1={hand.wrist_x * 1000}
                       y1={hand.wrist_y * 750}
@@ -97,6 +115,7 @@ export function VisionDebug() {
               <dl key={index}>
                 <dt>{hand.handedness} hand</dt><dd>{percentage(hand.confidence)}</dd>
                 <dt>Wrist</dt><dd>{hand.wrist_x.toFixed(3)}, {hand.wrist_y.toFixed(3)}</dd>
+                <dt>Index tip</dt><dd>{hand.touch_x.toFixed(3)}, {hand.touch_y.toFixed(3)}</dd>
                 <dt>Movement</dt><dd>{hand.movement_x.toFixed(4)}, {hand.movement_y.toFixed(4)}</dd>
                 <dt>Speed</dt><dd>{hand.speed.toFixed(3)} frame/s</dd>
               </dl>
@@ -108,14 +127,28 @@ export function VisionDebug() {
             {frame?.objects.length ? frame.objects.map((object, index) => (
               <dl key={index}>
                 <dt>{object.object_id ?? 'Unmapped'}</dt><dd>{percentage(object.confidence)}</dd>
-                <dt>YOLO class</dt><dd>{object.class_name}</dd>
-                <dt>Tray region</dt><dd>{object.on_tray ? 'inside' : 'outside'}</dd>
+                <dt>Object type</dt><dd>{object.class_name}</dd>
+                <dt>Activation region</dt><dd>{object.on_tray ? 'registered' : 'inactive'}</dd>
+                <dt>Center</dt><dd>{((object.bbox.x1 + object.bbox.x2) / 2).toFixed(3)}, {((object.bbox.y1 + object.bbox.y2) / 2).toFixed(3)}</dd>
+                <dt>Radius</dt><dd>{((object.bbox.x2 - object.bbox.x1) / 2).toFixed(3)}</dd>
               </dl>
             )) : <p className="empty-row">No objects detected</p>}
           </section>
 
           <section>
-            <div className="section-heading"><span>05</span><h2>Last event</h2></div>
+            <div className="section-heading"><span>05</span><h2>Touch countdown</h2></div>
+            {frame?.dwells?.length ? frame.dwells.map((dwell) => (
+              <dl key={`${dwell.object_id}-${dwell.handedness}`} className="debug-dwell">
+                <dt>Object</dt><dd>{dwell.object_id}</dd>
+                <dt>Hand</dt><dd>{dwell.handedness}</dd>
+                <dt>Remaining</dt><dd>{dwell.remaining_seconds.toFixed(1)} sec</dd>
+                <dt>Progress</dt><dd>{percentage(dwell.progress)}</dd>
+              </dl>
+            )) : <p className="empty-row">No object is being touched</p>}
+          </section>
+
+          <section>
+            <div className="section-heading"><span>06</span><h2>Last event</h2></div>
             <dl>
               <dt>Type</dt><dd>{lastEvent?.event_type ?? 'none'}</dd>
               <dt>Object</dt><dd>{lastEvent?.object_id ?? '—'}</dd>

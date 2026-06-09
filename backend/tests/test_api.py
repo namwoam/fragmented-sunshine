@@ -29,6 +29,14 @@ def test_objects_are_seeded(tmp_path):
             "perfume_01",
         }
 
+        updated = client.patch(
+            "/api/objects/perfume_01/location",
+            json={"location_x": 0.4, "location_y": 0.6, "touch_radius": 0.09},
+        )
+        assert updated.status_code == 200
+        assert updated.json()["location_x"] == 0.4
+        assert updated.json()["touch_radius"] == 0.09
+
 
 def test_recording_process_and_playback_flow(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake-ci-key")
@@ -99,7 +107,7 @@ def test_vision_event_is_forwarded_over_websocket(tmp_path):
         response = client.post(
             "/api/vision/events",
             json={
-                "event_type": "object_lifted",
+                "event_type": "object_activated",
                 "timestamp": 1.0,
                 "object_id": "perfume_01",
                 "handedness": "left",
@@ -108,7 +116,7 @@ def test_vision_event_is_forwarded_over_websocket(tmp_path):
             },
         )
         assert response.status_code == 202
-        assert websocket.receive_json()["event_type"] == "object_lifted"
+        assert websocket.receive_json()["event_type"] == "object_activated"
 
 
 def test_recording_camera_frame_is_forwarded_over_websocket(tmp_path):

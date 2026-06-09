@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 
 from .config import get_settings
 from .database import Database, now_iso, row_dict
-from .schemas import ObjectCreate, PlaybackEventCreate, VisionEvent
+from .schemas import ObjectCreate, ObjectLocationUpdate, PlaybackEventCreate, VisionEvent
 from .services import ProcessingService
 from .timeline import reorder_segments
 from .vision_hub import VisionEventHub
@@ -110,8 +110,19 @@ def create_object(payload: ObjectCreate):
             raise HTTPException(409, "Object ID already exists")
         created_at = now_iso()
         connection.execute(
-            "INSERT INTO objects VALUES (?, ?, ?, ?)",
-            (payload.object_id, payload.class_name, payload.display_name, created_at),
+            "INSERT INTO objects "
+            "(object_id, class_name, display_name, created_at, "
+            "location_x, location_y, touch_radius) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                payload.object_id,
+                payload.class_name,
+                payload.display_name,
+                created_at,
+                payload.location_x,
+                payload.location_y,
+                payload.touch_radius,
+            ),
         )
     return {**payload.model_dump(), "created_at": created_at}
 
@@ -130,6 +141,24 @@ def get_object(object_id: str):
             (object_id,),
         ).fetchall()
     return {**dict(object_row), "recordings": [dict(row) for row in recordings]}
+
+
+@app.patch("/api/objects/{object_id}/location")
+def update_object_location(object_id: str, payload: ObjectLocationUpdate):
+    with database.connection() as connection:
+        if not connection.execute(
+            "SELECT 1 FROM objects WHERE object_id = ?", (object_id,)
+        ).fetchone():
+            raise HTTPException(404, "Object not found")
+        connection.execute(
+            "UPDATE objects SET location_x = ?, location_y = ?, touch_radius = ? "
+            "WHERE object_id = ?",
+            (payload.location_x, payload.location_y, payload.touch_radius, object_id),
+        )
+        row = connection.execute(
+            "SELECT * FROM objects WHERE object_id = ?", (object_id,)
+        ).fetchone()
+    return dict(row)
 
 
 @app.post("/api/recordings", status_code=201)

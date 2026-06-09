@@ -1,6 +1,5 @@
 import argparse
 import base64
-import json
 import os
 import time
 from pathlib import Path
@@ -8,9 +7,8 @@ from pathlib import Path
 import cv2
 import httpx
 import mediapipe as mp
-from ultralytics import YOLO
 
-from .interactions import InteractionStateManager, center_in_roi
+from .interactions import InteractionStateManager
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,17 +21,13 @@ def parse_args() -> argparse.Namespace:
         help="Camera index streamed to the recording-camera debug feed",
     )
     parser.add_argument("--api", default=os.getenv("VISION_API_URL", "http://localhost:8000"))
-    parser.add_argument("--yolo-model", default=os.getenv("YOLO_MODEL", "yolo11n.pt"))
     parser.add_argument(
         "--hand-model",
         default=os.getenv("HAND_LANDMARKER_MODEL", "models/hand_landmarker.task"),
     )
-    parser.add_argument("--object-map", default=os.getenv("VISION_OBJECT_MAP", "{}"))
-    parser.add_argument("--confidence", type=float, default=0.45)
     parser.add_argument("--fps", type=float, default=12)
     parser.add_argument("--preview-quality", type=int, default=65)
-    parser.add_argument("--debounce-ms", type=int, default=400)
-    parser.add_argument("--tray-roi", default=os.getenv("TRAY_ROI", "0.08,0.08,0.92,0.92"))
+    parser.add_argument("--dwell-seconds", type=float, default=5.0)
     parser.add_argument("--swap-handedness", action="store_true")
     parser.add_argument("--preview", action="store_true")
     return parser.parse_args()
@@ -65,6 +59,7 @@ class HandTracker:
             xs = [landmark.x for landmark in landmarks]
             ys = [landmark.y for landmark in landmarks]
             wrist = landmarks[0]
+            touch = landmarks[8]
             previous = self.previous_wrists.get(handedness)
             movement_x = movement_y = speed = 0.0
             if previous and timestamp > previous[2]:
@@ -88,6 +83,8 @@ class HandTracker:
                     "movement_x": movement_x,
                     "movement_y": movement_y,
                     "speed": speed,
+                    "touch_x": touch.x,
+                    "touch_y": touch.y,
                 }
             )
         return hands
@@ -96,38 +93,43 @@ class HandTracker:
         self.landmarker.close()
 
 
-class ObjectTracker:
-    def __init__(self, model_path: str, object_map: dict[str, str], confidence: float):
-        self.model = YOLO(model_path)
-        self.object_map = {key.lower(): value for key, value in object_map.items()}
-        self.confidence = confidence
+class ObjectLocations:
+    def __init__(self, api_url: str):
+        self.api_url = api_url.rstrip("/")
+        self.objects: list[dict] = []
+        self.last_refresh = 0.0
 
-    def detect(self, frame, tray_roi: tuple[float, float, float, float]) -> list[dict]:
-        height, width = frame.shape[:2]
-        result = self.model.predict(frame, conf=self.confidence, verbose=False)[0]
-        detections = []
-        for box in result.boxes:
-            class_name = result.names[int(box.cls.item())]
-            coordinates = box.xyxy[0].tolist()
-            bbox = {
-                "x1": coordinates[0] / width,
-                "y1": coordinates[1] / height,
-                "x2": coordinates[2] / width,
-                "y2": coordinates[3] / height,
-            }
-            object_id = self.object_map.get(class_name.lower())
-            if object_id is None and class_name.lower() in self.object_map.values():
-                object_id = class_name.lower()
-            detections.append(
-                {
-                    "object_id": object_id,
-                    "class_name": class_name,
-                    "confidence": float(box.conf.item()),
-                    "bbox": bbox,
-                    "on_tray": center_in_roi(bbox, tray_roi),
-                }
-            )
-        return detections
+    def get(self, client: httpx.Client, timestamp: float) -> list[dict]:
+        if timestamp - self.last_refresh >= 2.0 or not self.objects:
+            try:
+                response = client.get(f"{self.api_url}/api/objects", timeout=1)
+                response.raise_for_status()
+                self.objects = [
+                    item
+                    for item in response.json()
+                    if item.get("location_x") is not None and item.get("location_y") is not None
+                ]
+                self.last_refresh = timestamp
+            except httpx.HTTPError:
+                pass
+        return [self._as_detection(item) for item in self.objects]
+
+    @staticmethod
+    def _as_detection(item: dict) -> dict:
+        radius = item.get("touch_radius", 0.08)
+        x = item["location_x"]
+        y = item["location_y"]
+        return {
+            **item,
+            "confidence": 1.0,
+            "bbox": {
+                "x1": max(0.0, x - radius),
+                "y1": max(0.0, y - radius),
+                "x2": min(1.0, x + radius),
+                "y2": min(1.0, y + radius),
+            },
+            "on_tray": True,
+        }
 
 
 def publish(client: httpx.Client, api_url: str, event: dict) -> None:
@@ -150,15 +152,8 @@ def encode_preview(frame, quality: int) -> str | None:
     return f"data:image/jpeg;base64,{base64.b64encode(encoded).decode('ascii')}"
 
 
-def draw_preview(frame, hands: list[dict], objects: list[dict], roi) -> None:
+def draw_preview(frame, hands: list[dict], objects: list[dict]) -> None:
     height, width = frame.shape[:2]
-    cv2.rectangle(
-        frame,
-        (int(roi[0] * width), int(roi[1] * height)),
-        (int(roi[2] * width), int(roi[3] * height)),
-        (180, 180, 180),
-        1,
-    )
     for item in [*hands, *objects]:
         box = item["bbox"]
         color = (60, 180, 255) if "handedness" in item else (120, 220, 120)
@@ -179,6 +174,14 @@ def draw_preview(frame, hands: list[dict], objects: list[dict], roi) -> None:
             color,
             1,
         )
+        if "handedness" in item:
+            cv2.circle(
+                frame,
+                (int(item["touch_x"] * width), int(item["touch_y"] * height)),
+                7,
+                color,
+                -1,
+            )
     cv2.imshow("Fragmented Sunshine - Tray Vision", frame)
 
 
@@ -187,14 +190,9 @@ def main() -> None:
     hand_model = Path(args.hand_model)
     if not hand_model.exists():
         raise SystemExit(f"MediaPipe model not found: {hand_model}. Run `task vision:models`.")
-    object_map = json.loads(args.object_map or "{}")
-    tray_roi = tuple(float(value) for value in args.tray_roi.split(","))
-    if len(tray_roi) != 4:
-        raise SystemExit("--tray-roi must contain x1,y1,x2,y2")
-
     hand_tracker = HandTracker(str(hand_model), args.swap_handedness)
-    object_tracker = ObjectTracker(args.yolo_model, object_map, args.confidence)
-    interactions = InteractionStateManager(args.debounce_ms / 1000, tray_roi=tray_roi)
+    object_locations = ObjectLocations(args.api)
+    interactions = InteractionStateManager(args.dwell_seconds)
     camera = cv2.VideoCapture(args.camera)
     if not camera.isOpened():
         raise SystemExit(f"Could not open tray camera {args.camera}")
@@ -219,12 +217,14 @@ def main() -> None:
                 timestamp = time.time()
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 hands = hand_tracker.detect(rgb, timestamp)
-                objects = object_tracker.detect(frame, tray_roi)
+                objects = object_locations.get(client, timestamp)
+                events = interactions.update(timestamp, hands, objects)
                 base = {
                     "timestamp": timestamp,
                     "frame_image": encode_preview(frame, args.preview_quality),
                     "hands": hands,
                     "objects": objects,
+                    "dwells": interactions.progress(timestamp),
                 }
                 publish(client, args.api, {"event_type": "frame", **base})
                 if recording_camera is not None:
@@ -241,10 +241,10 @@ def main() -> None:
                                 ),
                             },
                         )
-                for event in interactions.update(timestamp, hands, objects):
+                for event in events:
                     publish(client, args.api, {**event, "hands": hands, "objects": objects})
                 if args.preview:
-                    draw_preview(frame, hands, objects, tray_roi)
+                    draw_preview(frame, hands, objects)
                     if cv2.waitKey(1) & 0xFF == ord("q"):
                         break
                 time.sleep(max(0.0, interval - (time.monotonic() - loop_started)))

@@ -29,10 +29,22 @@ h1 span { display: block; white-space: nowrap; }
 .object span, .object small { font: 9px 'DM Mono', monospace; color: #77736b; }
 .object strong { font-size: 13px; font-weight: 500; }
 .object small { grid-column: 2; margin-top: 4px; }
+.object .location-status { color: #5f7d63; }
+.object .location-status.missing { color: #ad3e25; }
+.object.dwelling { opacity: 1; background: rgba(240, 108, 60, .08); }
+.object .object-countdown { color: #ad3e25; font-weight: 500; }
 .text-button { margin-top: 18px; padding: 0; border: 0; background: transparent; font: 10px 'DM Mono', monospace; cursor: pointer; }
+.registration-actions { display: grid; justify-items: start; }
+.registration-actions .text-button:disabled { opacity: .35; cursor: not-allowed; }
 .registration { display: grid; gap: 8px; margin-top: 18px; }
 .registration input { min-width: 0; border: 0; border-bottom: 1px solid #aaa69d; padding: 8px 2px; background: transparent; font-size: 12px; outline: none; }
 .registration button { border: 1px solid #aaa69d; background: transparent; padding: 6px 10px; margin-right: 5px; font-size: 10px; }
+.radius-field { display: grid; grid-template-columns: 1fr 70px; align-items: center; font: 9px 'DM Mono', monospace; text-transform: uppercase; }
+.location-picker { position: relative; width: 100%; aspect-ratio: 4 / 3; padding: 0 !important; overflow: hidden; cursor: crosshair; }
+.location-picker img { width: 100%; height: 100%; display: block; }
+.location-picker span { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+.location-picker .touch-region { border: 2px solid #f06c3c; background: rgba(240, 108, 60, .14); }
+.location-picker .touch-center { width: 8px; height: 8px; background: #f06c3c; box-shadow: 0 0 0 2px #f6f3eb; }
 .error, .message { color: #ad3e25 !important; }
 
 .stage { min-height: 490px; position: relative; border: 1px solid #aaa69d; background: #dedbd3; overflow: hidden; display: flex; align-items: center; justify-content: center; }
@@ -44,6 +56,14 @@ h1 span { display: block; white-space: nowrap; }
 .status-orbit.recording .pulse { background: #f06c3c; border-color: #f06c3c; animation: pulse 1.2s infinite; }
 .status-orbit strong, .status-orbit small { display: block; }
 .status-orbit strong { font-size: 13px; font-weight: 500; }
+.dwell-countdown { position: absolute; z-index: 4; display: flex; align-items: center; gap: 18px; padding: 18px 22px; color: #25231f; background: rgba(246, 243, 235, .94); border: 1px solid #f06c3c; box-shadow: 0 12px 40px rgba(37, 35, 31, .18); }
+.dwell-countdown > div:last-child { min-width: 165px; }
+.dwell-countdown small, .dwell-countdown strong, .dwell-countdown span { display: block; }
+.dwell-countdown > div:last-child strong { margin: 4px 0; font-size: 18px; font-weight: 500; }
+.dwell-countdown span { font: 10px 'DM Mono', monospace; color: #ad3e25; text-transform: uppercase; }
+.countdown-ring { width: 82px; height: 82px; border-radius: 50%; display: grid; place-content: center; text-align: center; background: radial-gradient(circle, #f6f3eb 58%, transparent 60%), conic-gradient(#f06c3c var(--dwell-progress), #cfcbc2 0); }
+.countdown-ring strong { font: 22px 'DM Mono', monospace; line-height: 1; }
+.countdown-ring small { margin-top: 3px; }
 .stage-copy { position: absolute; z-index: 3; left: 24px; right: 24px; bottom: 22px; display: flex; justify-content: space-between; align-items: end; color: #f5f2eb; mix-blend-mode: difference; }
 .stage-copy p { width: 260px; margin: 0; font-size: 13px; line-height: 1.5; }
 .stage-copy span { display: block; text-align: right; font: 9px 'DM Mono', monospace; text-transform: uppercase; }
@@ -80,12 +100,18 @@ footer a, .debug-nav a { color: inherit; text-decoration: none; }
 .debug-viewport svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .debug-viewport text { fill: #d8d4ca; font: 11px 'DM Mono', monospace; text-transform: uppercase; }
 .tray-roi { fill: none; stroke: #5f5c55; stroke-width: 1; stroke-dasharray: 8 8; }
-.object-box rect { fill: rgba(125, 210, 140, .08); stroke: #7dd28c; stroke-width: 3; }
+.object-box ellipse { fill: rgba(125, 210, 140, .12); stroke: #7dd28c; stroke-width: 3; }
+.object-box .object-center { fill: #7dd28c; stroke: #24231f; stroke-width: 2; }
+.object-box.dwelling ellipse { fill: rgba(240, 108, 60, .2); stroke: #f06c3c; stroke-width: 5; }
+.object-box .dwell-label { fill: #fff; font-size: 17px; font-weight: 500; paint-order: stroke; stroke: #25231f; stroke-width: 5px; }
+.debug-dwell { border-left: 3px solid #f06c3c; padding-left: 10px; }
 .object-box text { fill: #7dd28c; }
 .hand-box rect, .hand-box circle, .hand-box line { fill: rgba(240, 108, 60, .08); stroke: #f06c3c; stroke-width: 3; }
 .hand-box.right rect, .hand-box.right circle, .hand-box.right line { stroke: #67a9e5; }
 .hand-box.right text { fill: #67a9e5; }
 .hand-box line { marker-end: none; }
+.hand-box .touch-point { fill: #f06c3c; }
+.hand-box.right .touch-point { fill: #67a9e5; }
 .debug-empty { position: absolute; inset: 0; display: grid; place-items: center; color: #aaa69d; font: 11px 'DM Mono', monospace; }
 .debug-data { display: flex; flex-direction: column; gap: 28px; }
 .debug-data dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 15px 0 0; padding-bottom: 15px; border-bottom: 1px solid #cfcbc2; font: 10px 'DM Mono', monospace; }

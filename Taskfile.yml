@@ -15,7 +15,7 @@ tasks:
       - npm install --prefix {{.FRONTEND_DIR}}
 
   vision:setup:
-    desc: Install MediaPipe, OpenCV, and Ultralytics YOLO dependencies
+    desc: Install MediaPipe and OpenCV vision dependencies
     cmds:
       - uv sync --directory {{.BACKEND_DIR}} --dev --group vision
       - task: vision:models
@@ -27,7 +27,7 @@ tasks:
       - uv run --group vision python -m vision.download_models
 
   vision:dev:
-    desc: Run tray-camera hand and object detection with preview
+    desc: Run tray-camera fingertip and object-location tracking with preview
     dir: '{{.BACKEND_DIR}}'
     cmds:
       - uv run --group vision python -m vision.run --preview {{.CLI_ARGS}}

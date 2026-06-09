@@ -3,6 +3,9 @@ export type MemoryObject = {
   class_name: string
   display_name: string
   created_at: string
+  location_x: number | null
+  location_y: number | null
+  touch_radius: number
 }
 
 export type Segment = {
@@ -28,7 +31,7 @@ export type Playback = {
 export type InteractionState = 'on_tray' | 'recording' | 'processing' | 'playing' | 'unavailable'
 
 export type VisionEvent = {
-  event_type: 'frame' | 'recording_frame' | 'object_lifted' | 'object_returned'
+  event_type: 'frame' | 'recording_frame' | 'object_activated'
   timestamp: number
   frame_image: string | null
   object_id: string | null
@@ -42,6 +45,8 @@ export type VisionEvent = {
     movement_x: number
     movement_y: number
     speed: number
+    touch_x: number
+    touch_y: number
   }>
   objects: Array<{
     object_id: string | null
@@ -49,5 +54,12 @@ export type VisionEvent = {
     confidence: number
     bbox: { x1: number; y1: number; x2: number; y2: number }
     on_tray: boolean
+  }>
+  dwells: Array<{
+    object_id: string
+    handedness: 'left' | 'right'
+    elapsed_seconds: number
+    remaining_seconds: number
+    progress: number
   }>
 }

@@ -6,31 +6,41 @@ pytestmark = pytest.mark.unit
 
 OBJECT = {
     "object_id": "perfume_01",
-    "bbox": {"x1": 0.4, "y1": 0.4, "x2": 0.6, "y2": 0.7},
+    "location_x": 0.5,
+    "location_y": 0.5,
+    "touch_radius": 0.1,
 }
 LEFT_HAND = {
     "handedness": "left",
-    "bbox": {"x1": 0.42, "y1": 0.42, "x2": 0.62, "y2": 0.75},
+    "touch_x": 0.52,
+    "touch_y": 0.48,
 }
 
 
-def test_stable_left_hand_lift_and_return_emit_events():
-    manager = InteractionStateManager(debounce_seconds=0.4)
-    assert manager.update(0.0, [], [OBJECT]) == []
-    assert manager.update(0.5, [], [OBJECT]) == []
-    assert manager.update(0.6, [LEFT_HAND], [OBJECT]) == []
-    lifted = manager.update(1.1, [LEFT_HAND], [OBJECT])
-    assert lifted[0]["event_type"] == "object_lifted"
-    assert lifted[0]["handedness"] == "left"
-    assert manager.update(1.2, [], [OBJECT]) == []
-    returned = manager.update(1.7, [], [OBJECT])
-    assert returned[0]["event_type"] == "object_returned"
+def test_five_second_touch_emits_one_activation():
+    manager = InteractionStateManager(dwell_seconds=5.0)
+    assert manager.update(0.0, [LEFT_HAND], [OBJECT]) == []
+    assert manager.progress(2.0) == [
+        {
+            "object_id": "perfume_01",
+            "handedness": "left",
+            "elapsed_seconds": 2.0,
+            "remaining_seconds": 3.0,
+            "progress": 0.4,
+        }
+    ]
+    assert manager.update(4.99, [LEFT_HAND], [OBJECT]) == []
+    activated = manager.update(5.0, [LEFT_HAND], [OBJECT])
+    assert activated[0]["event_type"] == "object_activated"
+    assert activated[0]["handedness"] == "left"
+    assert manager.progress(5.0) == []
+    assert manager.update(6.0, [LEFT_HAND], [OBJECT]) == []
 
 
-def test_unstable_overlap_is_debounced():
-    manager = InteractionStateManager(debounce_seconds=0.4)
-    manager.update(0.0, [], [OBJECT])
-    manager.update(0.5, [], [OBJECT])
-    manager.update(0.6, [LEFT_HAND], [OBJECT])
-    manager.update(0.7, [], [OBJECT])
-    assert manager.update(1.2, [], [OBJECT]) == []
+def test_leaving_location_resets_dwell_timer():
+    manager = InteractionStateManager(dwell_seconds=5.0)
+    manager.update(0.0, [LEFT_HAND], [OBJECT])
+    manager.update(4.0, [], [OBJECT])
+    manager.update(4.1, [LEFT_HAND], [OBJECT])
+    assert manager.update(8.9, [LEFT_HAND], [OBJECT]) == []
+    assert manager.update(9.1, [LEFT_HAND], [OBJECT])[0]["event_type"] == "object_activated"

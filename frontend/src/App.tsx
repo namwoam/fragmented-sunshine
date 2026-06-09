@@ -9,8 +9,8 @@ import type { InteractionState, MemoryObject, Playback, VisionEvent } from './ty
 import './styles.css'
 
 const stateCopy: Record<InteractionState, { label: string; detail: string }> = {
-  on_tray: { label: 'Waiting', detail: 'Choose an object, then use either hand interaction.' },
-  recording: { label: 'Remembering', detail: 'Return the object to finish this reflection.' },
+  on_tray: { label: 'Waiting', detail: 'Touch an object location for five seconds with either hand.' },
+  recording: { label: 'Remembering', detail: 'Touch the location with your left hand again to finish.' },
   processing: { label: 'Settling', detail: 'The memory is being divided into fragments.' },
   playing: { label: 'Reappearing', detail: 'A familiar memory returns in a changed order.' },
   unavailable: { label: 'Offline', detail: 'The server could not be reached. Your recording remains in this browser.' },
@@ -116,17 +116,18 @@ export default function App() {
 
   function handleVisionEvent(event: VisionEvent) {
     if (event.event_type === 'frame') {
-      const detectedId = event.objects.find((item) => item.object_id)?.object_id
-      if (detectedId && stateRef.current === 'on_tray') setSelectedId(detectedId)
+      const activeDwell = event.dwells?.reduce((current, dwell) =>
+        !current || dwell.progress > current.progress ? dwell : current, event.dwells[0])
+      if (activeDwell) setSelectedId(activeDwell.object_id)
       return
     }
     if (!event.object_id) return
-    if (event.event_type === 'object_lifted' && stateRef.current === 'on_tray') {
+    if (event.event_type === 'object_activated' && stateRef.current === 'on_tray') {
       if (event.handedness === 'left') void startRecording(event.object_id)
       if (event.handedness === 'right') void beginPlayback(event.object_id)
     }
     if (
-      event.event_type === 'object_returned'
+      event.event_type === 'object_activated'
       && event.handedness === 'left'
       && stateRef.current === 'recording'
     ) {
@@ -138,6 +139,12 @@ export default function App() {
 
   const selected = objects.find((object) => object.object_id === selectedId)
   const status = stateCopy[state]
+  const activeDwell = vision.lastFrame?.dwells?.reduce((current, dwell) =>
+    !current || dwell.progress > current.progress ? dwell : current, vision.lastFrame.dwells[0])
+  const dwellObject = objects.find((object) => object.object_id === activeDwell?.object_id)
+  const dwellAction = activeDwell?.handedness === 'left'
+    ? state === 'recording' ? 'Finish recording' : 'Start recording'
+    : 'Start playback'
 
   return (
     <main>
@@ -157,17 +164,36 @@ export default function App() {
             {objects.map((object, index) => (
               <button
                 key={object.object_id}
-                className={selectedId === object.object_id ? 'object active' : 'object'}
+                className={`${selectedId === object.object_id ? 'object active' : 'object'}${activeDwell?.object_id === object.object_id ? ' dwelling' : ''}`}
                 onClick={() => setSelectedId(object.object_id)}
                 disabled={state !== 'on_tray'}
               >
                 <span>{String(index + 1).padStart(2, '0')}</span>
                 <strong>{object.display_name}</strong>
                 <small>{object.class_name.replaceAll('_', ' ')}</small>
+                <small className={object.location_x == null ? 'location-status missing' : 'location-status'}>
+                  {object.location_x != null && object.location_y != null
+                    ? `touch ${object.location_x.toFixed(2)}, ${object.location_y.toFixed(2)} / r ${object.touch_radius.toFixed(2)}`
+                    : 'touch location not set'}
+                </small>
+                {activeDwell?.object_id === object.object_id && (
+                  <small className="object-countdown">
+                    {activeDwell.handedness} hand / {activeDwell.remaining_seconds.toFixed(1)}s
+                  </small>
+                )}
               </button>
             ))}
           </div>
-          <ObjectRegistration onCreated={(object) => { setObjects((items) => [...items, object]); setSelectedId(object.object_id) }} />
+          <ObjectRegistration
+            frameImage={vision.lastFrame?.frame_image ?? null}
+            selectedObject={selected}
+            onSaved={(object) => {
+              setObjects((items) => items.some((item) => item.object_id === object.object_id)
+                ? items.map((item) => item.object_id === object.object_id ? object : item)
+                : [...items, object])
+              setSelectedId(object.object_id)
+            }}
+          />
         </aside>
 
         <section className="stage">
@@ -175,6 +201,23 @@ export default function App() {
             <span className="pulse" />
             <div><small>System state</small><strong>{status.label}</strong></div>
           </div>
+
+          {activeDwell && (
+            <div className="dwell-countdown" aria-live="polite">
+              <div
+                className="countdown-ring"
+                style={{ '--dwell-progress': `${activeDwell.progress * 360}deg` } as React.CSSProperties}
+              >
+                <strong>{Math.max(0, activeDwell.remaining_seconds).toFixed(1)}</strong>
+                <small>sec</small>
+              </div>
+              <div>
+                <small>{activeDwell.handedness} hand detected</small>
+                <strong>{dwellObject?.display_name ?? activeDwell.object_id}</strong>
+                <span>{dwellAction}</span>
+              </div>
+            </div>
+          )}
 
           {state === 'playing' && playback ? (
             <PlaybackPlayer playback={playback} onComplete={finishPlayback} />
@@ -199,11 +242,11 @@ export default function App() {
           <div className="section-heading"><span>02</span><h2>Gesture</h2></div>
           <button className="gesture left" onClick={() => void (state === 'recording' ? finishRecording() : startRecording())} disabled={!selectedId || !['on_tray', 'recording'].includes(state)}>
             <span className="hand">L</span>
-            <span><strong>{state === 'recording' ? 'Return object' : 'Lift with left'}</strong><small>{state === 'recording' ? 'Finish recording' : 'Record a memory'}</small></span>
+            <span><strong>{state === 'recording' ? 'Finish recording' : 'Left touch / 5 sec'}</strong><small>{state === 'recording' ? 'Store this memory' : 'Record a memory'}</small></span>
           </button>
           <button className="gesture right" onClick={() => void beginPlayback()} disabled={!selectedId || state !== 'on_tray'}>
             <span className="hand">R</span>
-            <span><strong>Lift with right</strong><small>Recall a memory</small></span>
+            <span><strong>Right touch / 5 sec</strong><small>Recall a memory</small></span>
           </button>
           <div className="vision-readout">
             <span className={vision.connected ? 'vision-dot connected' : 'vision-dot'} />
@@ -216,7 +259,7 @@ export default function App() {
               </small>
             </div>
           </div>
-          <p className="hint">MediaPipe tracks hand landmarks and movement. YOLO11 identifies mapped objects inside the calibrated tray region.</p>
+          <p className="hint">MediaPipe tracks the index fingertip. Fixed object locations activate after five seconds of continuous touch.</p>
         </aside>
       </section>
 

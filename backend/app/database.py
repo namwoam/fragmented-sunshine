@@ -10,7 +10,10 @@ CREATE TABLE IF NOT EXISTS objects (
     object_id TEXT PRIMARY KEY,
     class_name TEXT NOT NULL,
     display_name TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    location_x REAL,
+    location_y REAL,
+    touch_radius REAL NOT NULL DEFAULT 0.08
 );
 CREATE TABLE IF NOT EXISTS recordings (
     recording_id TEXT PRIMARY KEY,
@@ -52,6 +55,17 @@ class Database:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connection() as connection:
             connection.executescript(SCHEMA)
+            columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(objects)").fetchall()
+            }
+            if "location_x" not in columns:
+                connection.execute("ALTER TABLE objects ADD COLUMN location_x REAL")
+            if "location_y" not in columns:
+                connection.execute("ALTER TABLE objects ADD COLUMN location_y REAL")
+            if "touch_radius" not in columns:
+                connection.execute(
+                    "ALTER TABLE objects ADD COLUMN touch_radius REAL NOT NULL DEFAULT 0.08"
+                )
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
@@ -72,7 +86,8 @@ class Database:
         )
         with self.connection() as connection:
             connection.executemany(
-                "INSERT OR IGNORE INTO objects VALUES (?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO objects "
+                "(object_id, class_name, display_name, created_at) VALUES (?, ?, ?, ?)",
                 [
                     (object_id, class_name, name, now_iso())
                     for object_id, class_name, name in defaults
