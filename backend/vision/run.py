@@ -1,4 +1,5 @@
 import argparse
+import base64
 import json
 import os
 import time
@@ -24,6 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--object-map", default=os.getenv("VISION_OBJECT_MAP", "{}"))
     parser.add_argument("--confidence", type=float, default=0.45)
     parser.add_argument("--fps", type=float, default=12)
+    parser.add_argument("--preview-quality", type=int, default=65)
     parser.add_argument("--debounce-ms", type=int, default=400)
     parser.add_argument("--tray-roi", default=os.getenv("TRAY_ROI", "0.08,0.08,0.92,0.92"))
     parser.add_argument("--swap-handedness", action="store_true")
@@ -131,6 +133,17 @@ def publish(client: httpx.Client, api_url: str, event: dict) -> None:
         pass
 
 
+def encode_preview(frame, quality: int) -> str | None:
+    success, encoded = cv2.imencode(
+        ".jpg",
+        frame,
+        [cv2.IMWRITE_JPEG_QUALITY, max(1, min(quality, 100))],
+    )
+    if not success:
+        return None
+    return f"data:image/jpeg;base64,{base64.b64encode(encoded).decode('ascii')}"
+
+
 def draw_preview(frame, hands: list[dict], objects: list[dict], roi) -> None:
     height, width = frame.shape[:2]
     cv2.rectangle(
@@ -193,7 +206,12 @@ def main() -> None:
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 hands = hand_tracker.detect(rgb, timestamp)
                 objects = object_tracker.detect(frame, tray_roi)
-                base = {"timestamp": timestamp, "hands": hands, "objects": objects}
+                base = {
+                    "timestamp": timestamp,
+                    "frame_image": encode_preview(frame, args.preview_quality),
+                    "hands": hands,
+                    "objects": objects,
+                }
                 publish(client, args.api, {"event_type": "frame", **base})
                 for event in interactions.update(timestamp, hands, objects):
                     publish(client, args.api, {**event, "hands": hands, "objects": objects})

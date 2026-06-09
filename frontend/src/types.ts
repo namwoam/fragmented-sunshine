@@ -30,6 +30,7 @@ export type InteractionState = 'on_tray' | 'recording' | 'processing' | 'playing
 export type VisionEvent = {
   event_type: 'frame' | 'object_lifted' | 'object_returned'
   timestamp: number
+  frame_image: string | null
   object_id: string | null
   handedness: 'left' | 'right' | null
   hands: Array<{

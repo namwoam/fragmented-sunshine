@@ -73,8 +73,11 @@ footer a, .debug-nav a { color: inherit; text-decoration: none; }
 .debug-status.online::before { background: #f06c3c; border-color: #f06c3c; }
 .debug-header { margin-top: 35px; }
 .debug-grid { display: grid; grid-template-columns: minmax(500px, 2fr) minmax(260px, .8fr); gap: 28px; margin-top: 45px; }
+.debug-feeds { display: grid; gap: 28px; }
+.debug-feed .section-heading { margin-bottom: 12px; }
 .debug-viewport { position: relative; aspect-ratio: 4 / 3; background: #24231f; border: 1px solid #aaa69d; }
-.debug-viewport svg { width: 100%; height: 100%; }
+.debug-viewport img, .debug-viewport video { width: 100%; height: 100%; display: block; object-fit: fill; }
+.debug-viewport svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .debug-viewport text { fill: #d8d4ca; font: 11px 'DM Mono', monospace; text-transform: uppercase; }
 .tray-roi { fill: none; stroke: #5f5c55; stroke-width: 1; stroke-dasharray: 8 8; }
 .object-box rect { fill: rgba(125, 210, 140, .08); stroke: #7dd28c; stroke-width: 3; }

@@ -81,6 +81,7 @@ class ObjectDetection(BaseModel):
 class VisionEvent(BaseModel):
     event_type: str
     timestamp: float
+    frame_image: str | None = None
     object_id: str | None = None
     handedness: str | None = None
     hands: list[HandDetection] = Field(default_factory=list)
