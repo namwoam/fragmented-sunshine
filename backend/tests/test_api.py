@@ -63,6 +63,17 @@ def test_recording_process_and_playback_flow(tmp_path, monkeypatch):
     monkeypatch.setattr("app.services.shutil.which", lambda _: None)
     module, test_client = make_client(tmp_path)
     module.processor.gemini_api_key = "fake-ci-key"
+    monkeypatch.setattr(
+        module.processor,
+        "_transcribe",
+        lambda _: {
+            "language": "en",
+            "segments": [
+                {"start": 0.0, "end": 6.0, "text": "A remembered beginning"},
+                {"start": 6.0, "end": 16.0, "text": "A remembered ending"},
+            ],
+        },
+    )
 
     with test_client as client:
         upload = client.post(
@@ -85,6 +96,11 @@ def test_recording_process_and_playback_flow(tmp_path, monkeypatch):
             "A remembered ending",
         ]
         assert fake_generate.call_count == 1
+
+        transcript = client.get(f"/api/recordings/{recording_id}/transcript")
+        assert transcript.status_code == 200
+        assert transcript.json()["language"] == "en"
+        assert len(transcript.json()["segments"]) == 2
 
         playback = client.get("/api/objects/perfume_01/playback")
         assert playback.status_code == 200

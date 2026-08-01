@@ -61,6 +61,29 @@ class PlaybackEventCreate(BaseModel):
     played_at: datetime
 
 
+class TimelineRenderCreate(BaseModel):
+    timeline: list[str] = Field(min_length=1)
+
+
+class TimelineRenderResponse(BaseModel):
+    render_id: str
+    recording_id: str
+    timeline: list[str]
+    duration_seconds: float
+    media_url: str
+
+
+class TranscriptSegmentResponse(BaseModel):
+    start: float
+    end: float
+    text: str
+
+
+class TranscriptResponse(BaseModel):
+    language: str
+    segments: list[TranscriptSegmentResponse]
+
+
 class BoundingBox(BaseModel):
     x1: float
     y1: float

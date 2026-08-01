@@ -11,7 +11,15 @@ from fastapi.responses import FileResponse
 
 from .config import get_settings
 from .database import Database, now_iso, row_dict
-from .schemas import ObjectCreate, ObjectLocationUpdate, PlaybackEventCreate, VisionEvent
+from .schemas import (
+    ObjectCreate,
+    ObjectLocationUpdate,
+    PlaybackEventCreate,
+    TimelineRenderCreate,
+    TimelineRenderResponse,
+    TranscriptResponse,
+    VisionEvent,
+)
 from .services import ProcessingService
 from .timeline import reorder_segments
 from .vision_hub import VisionEventHub
@@ -23,6 +31,7 @@ processor = ProcessingService(
     settings.data_dir,
     gemini_api_key=settings.gemini_api_key,
     gemini_model=settings.gemini_model,
+    asr_model=settings.asr_model,
 )
 vision_hub = VisionEventHub()
 
@@ -87,6 +96,7 @@ def health():
         "ffmpeg_available": processor.ffmpeg_available,
         "gemini_configured": bool(settings.gemini_api_key),
         "gemini_model": settings.gemini_model,
+        "asr_model": settings.asr_model,
         "data_dir": str(settings.data_dir),
     }
 
@@ -255,6 +265,27 @@ def get_recording(recording_id: str):
     return recording
 
 
+@app.get("/api/recordings/{recording_id}/transcript", response_model=TranscriptResponse)
+def get_recording_transcript(recording_id: str):
+    with database.connection() as connection:
+        row = connection.execute(
+            "SELECT object_id FROM recordings WHERE recording_id = ?", (recording_id,)
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "Recording not found")
+    transcript_path = (
+        settings.data_dir
+        / "objects"
+        / row["object_id"]
+        / "recordings"
+        / recording_id
+        / "transcript.json"
+    )
+    if not transcript_path.exists():
+        raise HTTPException(404, "Transcript not available")
+    return json.loads(transcript_path.read_text(encoding="utf-8"))
+
+
 @app.get("/api/recordings/{recording_id}/media")
 def recording_media(recording_id: str):
     with database.connection() as connection:
@@ -275,6 +306,37 @@ def segment_media(segment_id: str):
     if not row or not row["video_segment_path"] or not Path(row["video_segment_path"]).exists():
         raise HTTPException(404, "Segment media not found")
     return FileResponse(row["video_segment_path"])
+
+
+@app.post(
+    "/api/recordings/{recording_id}/timeline-renders",
+    status_code=201,
+    response_model=TimelineRenderResponse,
+)
+def create_timeline_render(recording_id: str, payload: TimelineRenderCreate):
+    try:
+        render = processor.render_timeline(recording_id, payload.timeline)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, f"Timeline rendering failed: {exc}") from exc
+    return {
+        **render,
+        "media_url": f"/api/timeline-renders/{render['render_id']}/media",
+    }
+
+
+@app.get("/api/timeline-renders/{render_id}/media")
+def timeline_render_media(render_id: str):
+    with database.connection() as connection:
+        row = connection.execute(
+            "SELECT output_path FROM timeline_renders WHERE render_id = ?", (render_id,)
+        ).fetchone()
+    if not row or not Path(row["output_path"]).exists():
+        raise HTTPException(404, "Timeline render not found")
+    return FileResponse(row["output_path"], media_type="video/mp4")
 
 
 @app.get("/api/objects/{object_id}/playback")

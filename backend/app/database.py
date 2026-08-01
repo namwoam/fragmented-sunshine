@@ -44,6 +44,14 @@ CREATE TABLE IF NOT EXISTS playback_events (
     timeline_order TEXT NOT NULL,
     played_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS timeline_renders (
+    render_id TEXT PRIMARY KEY,
+    recording_id TEXT NOT NULL REFERENCES recordings(recording_id),
+    timeline_order TEXT NOT NULL,
+    output_path TEXT NOT NULL,
+    duration_seconds REAL NOT NULL,
+    created_at TEXT NOT NULL
+);
 """
 
 

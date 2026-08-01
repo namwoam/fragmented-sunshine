@@ -12,6 +12,7 @@ class Settings:
     cors_origins: tuple[str, ...]
     gemini_api_key: str | None
     gemini_model: str
+    asr_model: str
 
 
 def get_settings() -> Settings:
@@ -24,4 +25,5 @@ def get_settings() -> Settings:
         cors_origins=tuple(origin.strip() for origin in origins if origin.strip()),
         gemini_api_key=os.getenv("GEMINI_API_KEY"),
         gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        asr_model=os.getenv("ASR_MODEL", os.getenv("GEMINI_MODEL", "gemini-2.5-flash")),
     )
