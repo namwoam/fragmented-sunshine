@@ -11,30 +11,42 @@ tasks:
   setup:
     desc: Install backend and frontend dependencies
     cmds:
-      - uv sync --directory {{.BACKEND_DIR}} --dev
+      - uv sync --directory {{.BACKEND_DIR}} --dev --group camera
       - npm install --prefix {{.FRONTEND_DIR}}
 
   vision:setup:
-    desc: Install MediaPipe and OpenCV vision dependencies
+    desc: Install MediaPipe, OpenCV, and YOLO-World vision dependencies
     cmds:
       - uv sync --directory {{.BACKEND_DIR}} --dev --group vision
       - task: vision:models
 
   vision:models:
-    desc: Download the MediaPipe Hand Landmarker model
+    desc: Download the MediaPipe and YOLOv8m-Worldv2 models
     dir: '{{.BACKEND_DIR}}'
     cmds:
       - uv run --group vision python -m vision.download_models
 
   vision:dev:
-    desc: Run tray-camera fingertip and object-location tracking with preview
+    desc: Serve the remote MediaPipe and YOLO-World inference API
     dir: '{{.BACKEND_DIR}}'
     cmds:
-      - uv run --group vision python -m vision.run --preview {{.CLI_ARGS}}
+      - uv run --group vision python -m vision.run {{.CLI_ARGS}}
+
+  vision:client:
+    desc: Send laptop camera frames to the remote inference service
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - uv run --group camera python -m vision.camera_client {{.CLI_ARGS}}
+
+  vision:preview:
+    desc: Run the laptop camera client with a local preview window
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - uv run --group camera python -m vision.camera_client --preview {{.CLI_ARGS}}
 
   dev:
-    desc: Run the API and web client together
-    deps: [backend:dev, frontend:dev]
+    desc: Run the API, web client, and laptop camera inference client together
+    deps: [backend:dev, frontend:dev, vision:client]
 
   test:
     desc: Run backend tests and frontend checks
@@ -52,7 +64,7 @@ tasks:
     desc: Run FastAPI with reload
     dir: '{{.BACKEND_DIR}}'
     cmds:
-      - uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+      - uv run --group camera uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
   backend:test:
     desc: Run backend tests and lint
@@ -113,14 +125,14 @@ tasks:
       - docker compose logs -f
 
   docker:vision-models:
-    desc: Download MediaPipe model into the persistent Docker volume
+    desc: Download MediaPipe and YOLO-World models into the backend container
     cmds:
       - docker compose exec backend python -m vision.download_models
 
   docker:vision:
-    desc: Run tray vision inside the backend container on Linux hosts
+    desc: Serve the remote vision inference API inside the backend container
     cmds:
-      - docker compose exec backend python -m vision.run --api http://localhost:8000 {{.CLI_ARGS}}
+      - docker compose exec backend python -m vision.run {{.CLI_ARGS}}
 
   docker:reset:
     desc: Stop containers and delete the persistent data volume

@@ -6,9 +6,7 @@ pytestmark = pytest.mark.unit
 
 OBJECT = {
     "object_id": "perfume_01",
-    "location_x": 0.5,
-    "location_y": 0.5,
-    "touch_radius": 0.1,
+    "bbox": {"x1": 0.4, "y1": 0.4, "x2": 0.6, "y2": 0.6},
 }
 LEFT_HAND = {
     "handedness": "left",

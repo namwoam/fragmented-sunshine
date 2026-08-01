@@ -3,9 +3,6 @@ export type MemoryObject = {
   class_name: string
   display_name: string
   created_at: string
-  location_x: number | null
-  location_y: number | null
-  touch_radius: number
 }
 
 export type Segment = {

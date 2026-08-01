@@ -11,20 +11,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   objects: () => request<MemoryObject[]>('/api/objects'),
-  createObject: (object: Pick<MemoryObject, 'object_id' | 'class_name' | 'display_name' | 'location_x' | 'location_y' | 'touch_radius'>) =>
+  createObject: (object: Pick<MemoryObject, 'object_id' | 'class_name' | 'display_name'>) =>
     request<MemoryObject>('/api/objects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(object),
     }),
-  updateObjectLocation: (objectId: string, location: Pick<MemoryObject, 'location_x' | 'location_y' | 'touch_radius'>) =>
-    request<MemoryObject>(`/api/objects/${objectId}/location`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(location),
-    }),
-  resetObjectLocation: (objectId: string) =>
-    request<MemoryObject>(`/api/objects/${objectId}/location`, { method: 'DELETE' }),
   uploadRecording: (formData: FormData) =>
     request<{ recording_id: string }>('/api/recordings', { method: 'POST', body: formData }),
   processRecording: (recordingId: string) =>

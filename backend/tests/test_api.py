@@ -27,7 +27,27 @@ def test_objects_are_seeded(tmp_path):
             "plush_01",
             "card_01",
             "perfume_01",
+            "guitar_01",
+            "boat_01",
+            "r2d2_01",
+            "banknote_01",
         }
+        assert (
+            next(item["class_name"] for item in response.json() if item["object_id"] == "boat_01")
+            == "sailboat"
+        )
+
+        created = client.post(
+            "/api/objects",
+            json={
+                "object_id": "cup_01",
+                "class_name": "ceramic_cup",
+                "display_name": "Ceramic cup",
+            },
+        )
+        assert created.status_code == 201
+        assert created.json()["location_x"] is None
+        assert created.json()["location_y"] is None
 
         updated = client.patch(
             "/api/objects/perfume_01/location",

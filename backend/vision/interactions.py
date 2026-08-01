@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 
 
-def point_in_location(x: float, y: float, location: dict) -> bool:
-    distance = ((x - location["location_x"]) ** 2 + (y - location["location_y"]) ** 2) ** 0.5
-    return distance <= location.get("touch_radius", 0.08)
+def point_in_object(x: float, y: float, item: dict) -> bool:
+    box = item["bbox"]
+    return box["x1"] <= x <= box["x2"] and box["y1"] <= y <= box["y2"]
 
 
 @dataclass
@@ -23,12 +23,12 @@ class InteractionStateManager:
 
         for item in objects:
             object_id = item.get("object_id")
-            if not object_id or item.get("location_x") is None or item.get("location_y") is None:
+            if not object_id or "bbox" not in item:
                 continue
             for hand in hands:
                 handedness = hand["handedness"]
                 key = (object_id, handedness)
-                if not point_in_location(hand["touch_x"], hand["touch_y"], item):
+                if not point_in_object(hand["touch_x"], hand["touch_y"], item):
                     continue
                 active.add(key)
                 state = self.states.setdefault(key, DwellState(timestamp))
@@ -63,12 +63,8 @@ class InteractionStateManager:
                 "object_id": object_id,
                 "handedness": handedness,
                 "elapsed_seconds": min(timestamp - state.started_at, self.dwell_seconds),
-                "remaining_seconds": max(
-                    0.0, self.dwell_seconds - (timestamp - state.started_at)
-                ),
-                "progress": min(
-                    1.0, max(0.0, (timestamp - state.started_at) / self.dwell_seconds)
-                ),
+                "remaining_seconds": max(0.0, self.dwell_seconds - (timestamp - state.started_at)),
+                "progress": min(1.0, max(0.0, (timestamp - state.started_at) / self.dwell_seconds)),
             }
             for (object_id, handedness), state in self.states.items()
             if not state.fired

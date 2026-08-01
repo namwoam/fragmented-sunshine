@@ -1,36 +1,26 @@
-import argparse
-import base64
-import os
-import time
+import json
+import secrets
+import threading
 from pathlib import Path
+from typing import Annotated
 
+import click
 import cv2
-import httpx
 import mediapipe as mp
+import numpy as np
+import uvicorn
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
+from pydantic import BaseModel, Field
 
-from .interactions import InteractionStateManager
+from .objects import ObjectDetector
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Tray hand and object vision service")
-    parser.add_argument("--camera", type=int, default=int(os.getenv("TRAY_CAMERA_INDEX", "0")))
-    parser.add_argument(
-        "--recording-camera",
-        type=int,
-        default=int(os.getenv("RECORDING_CAMERA_INDEX", "1")),
-        help="Camera index streamed to the recording-camera debug feed",
-    )
-    parser.add_argument("--api", default=os.getenv("VISION_API_URL", "http://localhost:8000"))
-    parser.add_argument(
-        "--hand-model",
-        default=os.getenv("HAND_LANDMARKER_MODEL", "models/hand_landmarker.task"),
-    )
-    parser.add_argument("--fps", type=float, default=12)
-    parser.add_argument("--preview-quality", type=int, default=65)
-    parser.add_argument("--dwell-seconds", type=float, default=3.0)
-    parser.add_argument("--swap-handedness", action="store_true")
-    parser.add_argument("--preview", action="store_true")
-    return parser.parse_args()
+class RegisteredObject(BaseModel):
+    object_id: str = Field(min_length=1, max_length=80)
+    class_name: str = Field(min_length=1, max_length=120)
 
 
 class HandTracker:
@@ -93,167 +83,133 @@ class HandTracker:
         self.landmarker.close()
 
 
-class ObjectLocations:
-    def __init__(self, api_url: str):
-        self.api_url = api_url.rstrip("/")
-        self.objects: list[dict] = []
-        self.last_refresh = 0.0
+class InferenceEngine:
+    def __init__(self, hand_tracker: HandTracker, object_detector: ObjectDetector):
+        self.hand_tracker = hand_tracker
+        self.object_detector = object_detector
+        self.lock = threading.Lock()
 
-    def get(self, client: httpx.Client, timestamp: float) -> list[dict]:
-        if timestamp - self.last_refresh >= 2.0 or not self.objects:
-            try:
-                response = client.get(f"{self.api_url}/api/objects", timeout=1)
-                response.raise_for_status()
-                self.objects = [
-                    item
-                    for item in response.json()
-                    if item.get("location_x") is not None and item.get("location_y") is not None
-                ]
-                self.last_refresh = timestamp
-            except httpx.HTTPError:
-                pass
-        return [self._as_detection(item) for item in self.objects]
+    def infer(self, frame, timestamp: float, registrations: list[dict]) -> dict:
+        with self.lock:
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            hands = self.hand_tracker.detect(rgb, timestamp)
+            objects = self.object_detector.detect(frame, registrations)
+        return {"timestamp": timestamp, "hands": hands, "objects": objects}
 
-    @staticmethod
-    def _as_detection(item: dict) -> dict:
-        radius = item.get("touch_radius", 0.08)
-        x = item["location_x"]
-        y = item["location_y"]
-        return {
-            **item,
-            "confidence": 1.0,
-            "bbox": {
-                "x1": max(0.0, x - radius),
-                "y1": max(0.0, y - radius),
-                "x2": min(1.0, x + radius),
-                "y2": min(1.0, y + radius),
-            },
-            "on_tray": True,
-        }
+    def close(self) -> None:
+        self.hand_tracker.close()
 
 
-def publish(client: httpx.Client, api_url: str, event: dict) -> None:
-    try:
-        client.post(
-            f"{api_url.rstrip('/')}/api/vision/events", json=event, timeout=1
-        ).raise_for_status()
-    except httpx.HTTPError:
-        pass
+def create_app(engine: InferenceEngine, token: str | None = None) -> FastAPI:
+    app = FastAPI(title="Fragmented Sunshine Remote Vision")
 
+    @app.get("/health")
+    def health():
+        return {"status": "ok", "inference": "ready"}
 
-def encode_preview(frame, quality: int) -> str | None:
-    success, encoded = cv2.imencode(
-        ".jpg",
-        frame,
-        [cv2.IMWRITE_JPEG_QUALITY, max(1, min(quality, 100))],
-    )
-    if not success:
-        return None
-    return f"data:image/jpeg;base64,{base64.b64encode(encoded).decode('ascii')}"
+    @app.post("/infer")
+    async def infer(
+        frame: Annotated[UploadFile, File()],
+        timestamp: Annotated[float, Form()],
+        objects: Annotated[str, Form()],
+        authorization: Annotated[str | None, Header()] = None,
+    ):
+        if token:
+            expected = f"Bearer {token}"
+            if authorization is None or not secrets.compare_digest(authorization, expected):
+                raise HTTPException(401, "Invalid inference token")
 
-
-def draw_preview(frame, hands: list[dict], objects: list[dict]) -> None:
-    height, width = frame.shape[:2]
-    for item in [*hands, *objects]:
-        box = item["bbox"]
-        color = (60, 180, 255) if "handedness" in item else (120, 220, 120)
-        cv2.rectangle(
-            frame,
-            (int(box["x1"] * width), int(box["y1"] * height)),
-            (int(box["x2"] * width), int(box["y2"] * height)),
-            color,
-            2,
-        )
-        label = item.get("handedness") or item.get("object_id") or item["class_name"]
-        cv2.putText(
-            frame,
-            label,
-            (int(box["x1"] * width), int(box["y1"] * height) - 8),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            color,
-            1,
-        )
-        if "handedness" in item:
-            cv2.circle(
-                frame,
-                (int(item["touch_x"] * width), int(item["touch_y"] * height)),
-                7,
-                color,
-                -1,
-            )
-    cv2.imshow("Fragmented Sunshine - Tray Vision", frame)
-
-
-def main() -> None:
-    args = parse_args()
-    hand_model = Path(args.hand_model)
-    if not hand_model.exists():
-        raise SystemExit(f"MediaPipe model not found: {hand_model}. Run `task vision:models`.")
-    hand_tracker = HandTracker(str(hand_model), args.swap_handedness)
-    object_locations = ObjectLocations(args.api)
-    interactions = InteractionStateManager(args.dwell_seconds)
-    camera = cv2.VideoCapture(args.camera)
-    if not camera.isOpened():
-        raise SystemExit(f"Could not open tray camera {args.camera}")
-    recording_camera = cv2.VideoCapture(args.recording_camera)
-    if not recording_camera.isOpened():
-        recording_camera.release()
-        recording_camera = None
-        print(
-            f"Warning: could not open recording camera {args.recording_camera}; "
-            "the recording debug feed will be unavailable."
-        )
-
-    interval = 1 / args.fps
-    with httpx.Client() as client:
+        payload = await frame.read()
+        if not payload or len(payload) > 10 * 1024 * 1024:
+            raise HTTPException(413, "Frame must be between 1 byte and 10 MB")
+        decoded = cv2.imdecode(np.frombuffer(payload, dtype=np.uint8), cv2.IMREAD_COLOR)
+        if decoded is None:
+            raise HTTPException(422, "Frame is not a valid image")
         try:
-            while True:
-                loop_started = time.monotonic()
-                success, frame = camera.read()
-                if not success:
-                    time.sleep(interval)
-                    continue
-                timestamp = time.time()
-                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                hands = hand_tracker.detect(rgb, timestamp)
-                objects = object_locations.get(client, timestamp)
-                events = interactions.update(timestamp, hands, objects)
-                base = {
-                    "timestamp": timestamp,
-                    "frame_image": encode_preview(frame, args.preview_quality),
-                    "hands": hands,
-                    "objects": objects,
-                    "dwells": interactions.progress(timestamp),
-                }
-                publish(client, args.api, {"event_type": "frame", **base})
-                if recording_camera is not None:
-                    recording_success, recording_frame = recording_camera.read()
-                    if recording_success:
-                        publish(
-                            client,
-                            args.api,
-                            {
-                                "event_type": "recording_frame",
-                                "timestamp": timestamp,
-                                "frame_image": encode_preview(
-                                    recording_frame, args.preview_quality
-                                ),
-                            },
-                        )
-                for event in events:
-                    publish(client, args.api, {**event, "hands": hands, "objects": objects})
-                if args.preview:
-                    draw_preview(frame, hands, objects)
-                    if cv2.waitKey(1) & 0xFF == ord("q"):
-                        break
-                time.sleep(max(0.0, interval - (time.monotonic() - loop_started)))
-        finally:
-            camera.release()
-            if recording_camera is not None:
-                recording_camera.release()
-            hand_tracker.close()
-            cv2.destroyAllWindows()
+            registrations = [
+                item.model_dump()
+                for item in [RegisteredObject.model_validate(item) for item in json.loads(objects)]
+            ]
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise HTTPException(422, "Objects must be a valid registered-object list") from exc
+        return engine.infer(decoded, timestamp, registrations)
+
+    return app
+
+
+@click.command(help="Serve MediaPipe and YOLO inference for laptop camera clients.")
+@click.option(
+    "--host",
+    envvar="VISION_INFERENCE_HOST",
+    default="0.0.0.0",
+    show_default=True,
+)
+@click.option(
+    "--port",
+    type=click.IntRange(1, 65535),
+    envvar="VISION_INFERENCE_PORT",
+    default=8010,
+    show_default=True,
+)
+@click.option(
+    "--hand-model",
+    envvar="HAND_LANDMARKER_MODEL",
+    default="models/hand_landmarker.task",
+    show_default=True,
+)
+@click.option(
+    "--object-model",
+    envvar="YOLO_WORLD_MODEL",
+    default="yolov8m-worldv2.pt",
+    show_default=True,
+)
+@click.option(
+    "--object-confidence",
+    type=click.FloatRange(0, 1),
+    envvar="YOLO_WORLD_CONFIDENCE",
+    default=0.10,
+    show_default=True,
+)
+@click.option(
+    "--object-iou",
+    type=click.FloatRange(0, 1),
+    envvar="YOLO_WORLD_IOU",
+    default=0.5,
+    show_default=True,
+)
+@click.option("--object-device", envvar="YOLO_WORLD_DEVICE", default=None)
+@click.option("--swap-handedness", is_flag=True)
+@click.option("--token", envvar="VISION_INFERENCE_TOKEN", default=None)
+def main(
+    host: str,
+    port: int,
+    hand_model: str,
+    object_model: str,
+    object_confidence: float,
+    object_iou: float,
+    object_device: str | None,
+    swap_handedness: bool,
+    token: str | None,
+) -> None:
+    hand_model_path = Path(hand_model)
+    if not hand_model_path.exists():
+        raise click.ClickException(
+            f"MediaPipe model not found: {hand_model_path}. Run `task vision:models`."
+        )
+    engine = InferenceEngine(
+        HandTracker(str(hand_model_path), swap_handedness),
+        ObjectDetector(
+            model_path=object_model,
+            confidence=object_confidence,
+            iou=object_iou,
+            device=object_device,
+        ),
+    )
+    click.echo(f"Remote vision listening on http://{host}:{port}")
+    try:
+        uvicorn.run(create_app(engine, token), host=host, port=port)
+    finally:
+        engine.close()
 
 
 if __name__ == "__main__":

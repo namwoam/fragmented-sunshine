@@ -9,8 +9,8 @@ import type { InteractionState, MemoryObject, Playback, VisionEvent } from './ty
 import './styles.css'
 
 const stateCopy: Record<InteractionState, { label: string; detail: string }> = {
-  on_tray: { label: 'Waiting', detail: 'Touch an object location for three seconds with either hand.' },
-  recording: { label: 'Remembering', detail: 'Keep touching the object location. Move your left hand away to finish.' },
+  on_tray: { label: 'Waiting', detail: 'Touch a detected object for three seconds with either hand.' },
+  recording: { label: 'Remembering', detail: 'Keep touching the detected object. Move your left hand away to finish.' },
   processing: { label: 'Settling', detail: 'The memory is being divided into fragments.' },
   playing: { label: 'Reappearing', detail: 'A familiar memory returns in a changed order.' },
   unavailable: { label: 'Offline', detail: 'The server could not be reached. Your recording remains in this browser.' },
@@ -143,17 +143,6 @@ export default function App() {
   const status = stateCopy[state]
   const activeDwells = vision.lastFrame?.dwells ?? []
 
-  async function resetObjectLocation(objectId: string) {
-    try {
-      const resetObject = await api.resetObjectLocation(objectId)
-      setObjects((items) => items.map((item) =>
-        item.object_id === objectId ? resetObject : item))
-      setMessage(`${resetObject.display_name} touch location reset.`)
-    } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : 'Could not reset object location')
-    }
-  }
-
   return (
     <main>
       <header>
@@ -184,11 +173,7 @@ export default function App() {
                     <span>{String(index + 1).padStart(2, '0')}</span>
                     <strong>{object.display_name}</strong>
                     <small>{object.class_name.replaceAll('_', ' ')}</small>
-                    <small className={object.location_x == null ? 'location-status missing' : 'location-status'}>
-                      {object.location_x != null && object.location_y != null
-                        ? `touch ${object.location_x.toFixed(2)}, ${object.location_y.toFixed(2)} / r ${object.touch_radius.toFixed(2)}`
-                        : 'touch location not set'}
-                    </small>
+                    <small className="location-status">YOLO-World detection enabled</small>
                     {objectDwells.map((dwell) => (
                       <span className={`object-progress ${dwell.handedness}`} key={dwell.handedness}>
                         <span className="object-progress-copy">
@@ -201,21 +186,11 @@ export default function App() {
                       </span>
                     ))}
                   </button>
-                  <button
-                    className="object-reset"
-                    onClick={() => void resetObjectLocation(object.object_id)}
-                    disabled={state !== 'on_tray' || object.location_x == null}
-                    aria-label={`Reset touch location for ${object.display_name}`}
-                  >
-                    Reset position + radius
-                  </button>
                 </div>
               )
             })}
           </div>
           <ObjectRegistration
-            frameImage={vision.lastFrame?.frame_image ?? null}
-            selectedObject={selected}
             onSaved={(object) => {
               setObjects((items) => items.some((item) => item.object_id === object.object_id)
                 ? items.map((item) => item.object_id === object.object_id ? object : item)
@@ -275,7 +250,7 @@ export default function App() {
               </small>
             </div>
           </div>
-          <p className="hint">MediaPipe tracks the index fingertip. Fixed object locations activate after three seconds of continuous touch.</p>
+          <p className="hint">MediaPipe tracks the index fingertip. YOLOv8m-Worldv2 detects registered object classes; touching a live detection for three seconds activates it.</p>
         </aside>
       </section>
 

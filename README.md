@@ -18,14 +18,16 @@ The root `.env` is loaded by the backend. Supported settings are documented in `
 ## Commands
 
 ```bash
-task setup           # install all dependencies
-task dev             # run frontend and backend concurrently
+task setup           # install laptop application and camera-client dependencies
+task dev             # run frontend, backend, and laptop camera inference client
 task test            # lint, test, and build
 task format          # format and autofix backend code
 task backend:dev     # API only
 task frontend:dev    # web client only
-task vision:setup    # install MediaPipe/OpenCV and download hand model
-task vision:dev      # run tray-camera inference with a preview window
+task vision:setup    # install vision dependencies and download hand/object models
+task vision:client   # run only the laptop camera inference client
+task vision:dev      # serve the remote MediaPipe + YOLO-World inference API
+task vision:preview  # run the laptop client with a local preview window
 task backend:test:unit         # CPU-only unit tests with mocked AI
 task backend:test:integration  # API, SQLite, media, and WebSocket integration tests
 ```
@@ -40,12 +42,51 @@ GitHub Actions runs three independent jobs on pushes and pull requests:
 
 CI installs only the standard backend development dependencies. MediaPipe, Ultralytics, model downloads, cameras, GPUs, and real API credentials are not required. Gemini responses are supplied by deterministic in-process fakes.
 
-Open `http://localhost:5173/debug` to inspect registered object locations, handedness, index fingertips, wrist movement vectors, and three-second activation events.
-The tray camera defaults to device index `0`; the backend recording-camera debug feed defaults to index `1`. Override them with `TRAY_CAMERA_INDEX` and `RECORDING_CAMERA_INDEX`, or pass `--camera` and `--recording-camera` to `task vision:dev --`.
+Open `http://localhost:5173/debug` to inspect live YOLO-World object detections, handedness, index fingertips, wrist movement vectors, and three-second activation events.
+The tray camera defaults to device index `0`; the backend recording-camera debug feed defaults to index `1`. Override them with `TRAY_CAMERA_INDEX` and `RECORDING_CAMERA_INDEX`, or pass `--camera` and `--recording-camera` to `task vision:client --`.
 
 ## Tray vision
 
-The tray worker uses MediaPipe Hand Landmarker for handedness, index-fingertip position, wrist movement, and speed. Select an object in the installation console, choose **Set selected location**, and click its fixed position in the live tray image. Holding the left index fingertip in that region for three seconds starts recording; moving it away stops recording. Holding the right fingertip there for three seconds starts playback. If camera mirroring reverses handedness, start the worker with `task vision:dev -- --swap-handedness`.
+The remote service uses MediaPipe Hand Landmarker for handedness, index-fingertip position, wrist movement, and speed, plus YOLOv8m-Worldv2 for open-vocabulary object detection. Each registered object's `class_name` becomes a visual prompt (underscores are converted to spaces). Holding the left index fingertip inside its live detection box for three seconds starts recording; moving it away stops recording. Holding the right fingertip there for three seconds starts playback. If camera mirroring reverses handedness, start the remote service with `task vision:dev -- --swap-handedness`.
+
+The object detector defaults to `yolov8m-worldv2.pt`, confidence `0.10`, and IoU `0.5`. Override these with `YOLO_WORLD_MODEL`, `YOLO_WORLD_CONFIDENCE`, `YOLO_WORLD_IOU`, and `YOLO_WORLD_DEVICE`, or the matching `task vision:dev -- --object-*` flags. Model weights are downloaded by Ultralytics during `task vision:setup` and are not committed.
+
+### Remote vision worker
+
+`task dev` runs the API, frontend, and camera client on the laptop. For every tray frame, the client reads the current object catalog from the local API, sends a JPEG and those open-vocabulary prompts to the remote domain, receives hand and object detections in the same HTTP response, and publishes the results to the local API. Dwell tracking and the recording-camera debug feed remain on the laptop.
+
+Only the remote inference domain needs to be reachable over the network. The remote server does not connect to the laptop, and the laptop does not expose its camera or local API. Configure the laptop's `.env` with the public HTTPS endpoint and a shared bearer token:
+
+```dotenv
+TRAY_CAMERA_INDEX=0
+RECORDING_CAMERA_INDEX=1
+VISION_INFERENCE_URL=https://vision.example.com
+VISION_INFERENCE_TOKEN=replace-with-a-long-random-token
+```
+
+```bash
+task setup
+task dev
+```
+
+On the GPU server, clone the repository and configure the listener and the same token:
+
+```dotenv
+VISION_INFERENCE_HOST=0.0.0.0
+VISION_INFERENCE_PORT=8010
+VISION_INFERENCE_TOKEN=replace-with-a-long-random-token
+YOLO_WORLD_DEVICE=0
+```
+
+Then run inference headlessly on the GPU server:
+
+```bash
+task vision:setup
+task vision:dev
+curl http://localhost:8010/health
+```
+
+Point the public domain's TLS reverse proxy at port `8010`; allow multipart request bodies large enough for a JPEG frame and use an upstream timeout longer than `VISION_INFERENCE_TIMEOUT_SECONDS`. The token is optional for local testing but strongly recommended for a public domain. Run `task vision:dev -- --help` and `task vision:client -- --help` for the Click-based server and client options.
 
 ## Docker
 
@@ -56,17 +97,18 @@ task docker:vision-models
 
 The application is available at `http://localhost:8080`. The named `fragmented_sunshine_data` volume stores SQLite, recordings, transcripts, extracted segments, and MediaPipe model assets under `/data` in the backend container. `task docker:down` keeps the volume; `task docker:reset` explicitly deletes it.
 
-On a Linux installation host, pass the tray camera into the backend container and run `task docker:vision`. Docker Desktop on macOS does not expose webcams as `/dev/video*`, so run `task vision:dev` on the host while the two application containers are running; it publishes detections to port 8080 through the frontend proxy.
+`task docker:vision` starts the inference API in an existing backend container. Expose its configured inference port before using that setup. Laptop cameras remain attached to `task vision:client`, including on macOS where Docker Desktop does not expose webcams as `/dev/video*`.
 
 ## Current pipeline
 
-1. The console seeds the three MVP objects and supports registration of additional objects.
+1. The console seeds the three MVP objects and supports registration of additional YOLO-World visual class prompts.
 2. A left-hand action records webcam and microphone media through the browser.
 3. FastAPI stores media under `backend/data/objects/<object_id>/recordings/` and metadata in SQLite.
-4. Processing reads a timestamped `transcript.json` when supplied. Until Breeze-ASR is deployed, it creates neutral placeholder timestamp units.
-5. Gemini converts timestamped transcripts into structured reorderable segments. Network or model failures use the input units unchanged.
-6. A right-hand action retrieves a deterministic timeline whose disruption increases with replay count.
-7. With `ffmpeg`, physical clips are extracted. Without it, the browser plays the same timeline by seeking through the original media.
+4. Processing reads a cached `transcript.json` or extracts 16 kHz mono audio with `ffmpeg` and sends it to the configured Gemini ASR model for verbatim, timestamped `zh-TW`/mixed-language transcription.
+5. Gemini groups adjacent transcript units into validated semantic segments. Text-changing or unavailable model responses fall back to the original ASR units.
+6. Exact H.264/AAC segment clips are extracted with `ffmpeg`; processing fails clearly instead of inventing placeholder transcripts when ASR is unavailable.
+7. A right-hand action retrieves a deterministic timeline whose disruption increases with replay count. `POST /api/recordings/{recording_id}/timeline-renders` validates a complete segment permutation and renders it to one MP4.
+8. `GET /api/recordings/{recording_id}/transcript` returns the persisted timestamped transcript, and rendered media is served from `/api/timeline-renders/{render_id}/media`.
 
 The UI buttons are the demo interaction adapter. MediaPipe fingertip dwell events invoke the same recording and playback actions when the installation vision process is connected.
 

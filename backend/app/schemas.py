@@ -7,8 +7,8 @@ class ObjectCreate(BaseModel):
     object_id: str = Field(pattern=r"^[a-zA-Z0-9_-]+$", max_length=80)
     class_name: str = Field(min_length=1, max_length=120)
     display_name: str = Field(min_length=1, max_length=120)
-    location_x: float = Field(ge=0, le=1)
-    location_y: float = Field(ge=0, le=1)
+    location_x: float | None = Field(default=None, ge=0, le=1)
+    location_y: float | None = Field(default=None, ge=0, le=1)
     touch_radius: float = Field(default=0.08, ge=0.02, le=0.3)
 
 

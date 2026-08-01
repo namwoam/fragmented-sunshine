@@ -13,9 +13,16 @@ def main() -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         print(f"MediaPipe model already exists: {destination}")
-        return
-    print(f"Downloading MediaPipe Hand Landmarker to {destination}")
-    urllib.request.urlretrieve(HAND_LANDMARKER_URL, destination)
+    else:
+        print(f"Downloading MediaPipe Hand Landmarker to {destination}")
+        urllib.request.urlretrieve(HAND_LANDMARKER_URL, destination)
+
+    from ultralytics import YOLOWorld
+
+    object_model = os.getenv("YOLO_WORLD_MODEL", "yolov8m-worldv2.pt")
+    print(f"Loading YOLO-World object detector and CLIP text encoder: {object_model}")
+    detector = YOLOWorld(object_model)
+    detector.set_classes(["object"])
 
 
 if __name__ == "__main__":

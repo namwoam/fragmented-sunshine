@@ -128,9 +128,9 @@ export function VisionDebug() {
               <dl key={index}>
                 <dt>{object.object_id ?? 'Unmapped'}</dt><dd>{percentage(object.confidence)}</dd>
                 <dt>Object type</dt><dd>{object.class_name}</dd>
-                <dt>Activation region</dt><dd>{object.on_tray ? 'registered' : 'inactive'}</dd>
+                <dt>Detection</dt><dd>{object.on_tray ? 'live' : 'inactive'}</dd>
                 <dt>Center</dt><dd>{((object.bbox.x1 + object.bbox.x2) / 2).toFixed(3)}, {((object.bbox.y1 + object.bbox.y2) / 2).toFixed(3)}</dd>
-                <dt>Radius</dt><dd>{((object.bbox.x2 - object.bbox.x1) / 2).toFixed(3)}</dd>
+                <dt>Box size</dt><dd>{(object.bbox.x2 - object.bbox.x1).toFixed(3)} × {(object.bbox.y2 - object.bbox.y1).toFixed(3)}</dd>
               </dl>
             )) : <p className="empty-row">No objects detected</p>}
           </section>

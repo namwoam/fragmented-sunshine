@@ -91,6 +91,10 @@ class Database:
             ("plush_01", "plush_toy", "Plush toy"),
             ("card_01", "handwritten_card", "Handwritten card"),
             ("perfume_01", "perfume_bottle", "Perfume bottle"),
+            ("guitar_01", "guitar", "Guitar"),
+            ("boat_01", "sailboat", "Boat"),
+            ("r2d2_01", "R2-D2_robot", "R2-D2"),
+            ("banknote_01", "banknote", "Banknote"),
         )
         with self.connection() as connection:
             connection.executemany(
