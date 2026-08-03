@@ -6,6 +6,13 @@ function percentage(value: number) {
   return `${Math.round(value * 100)}%`
 }
 
+function lockLabel(lock: VisionEvent['locks'][number]) {
+  if (lock.status === 'activated') {
+    return lock.object_visible ? 'ACTIVATED / LIVE' : 'ACTIVATED / HAND LOCK'
+  }
+  return lock.status === 'hand_locked' ? 'HAND LOCK' : 'LIVE CONTACT'
+}
+
 export function VisionDebug() {
   const [lastEvent, setLastEvent] = useState<VisionEvent | null>(null)
   const vision = useVisionEvents((event) => {
@@ -86,6 +93,16 @@ export function VisionDebug() {
                     <text x={hand.bbox.x1 * 1000} y={hand.bbox.y1 * 750 - 9}>
                       {hand.handedness} / {percentage(hand.confidence)}
                     </text>
+                    {frame.locks.filter((lock) => lock.handedness === hand.handedness).map((lock, lockIndex) => (
+                      <text
+                        key={`${lock.object_id}-${lock.handedness}`}
+                        className="lock-label"
+                        x={hand.bbox.x1 * 1000}
+                        y={hand.bbox.y1 * 750 + 18 + lockIndex * 16}
+                      >
+                        {lock.object_id} / {lockLabel(lock)}
+                      </text>
+                    ))}
                   </g>
                 ))}
               </svg>
@@ -148,7 +165,19 @@ export function VisionDebug() {
           </section>
 
           <section>
-            <div className="section-heading"><span>06</span><h2>Last event</h2></div>
+            <div className="section-heading"><span>06</span><h2>Interaction locks</h2></div>
+            {frame?.locks.length ? frame.locks.map((lock) => (
+              <dl key={`${lock.object_id}-${lock.handedness}`} className="debug-lock">
+                <dt>Object</dt><dd>{lock.object_id}</dd>
+                <dt>Hand</dt><dd>{lock.handedness}</dd>
+                <dt>Status</dt><dd>{lock.status.replace('_', ' ')}</dd>
+                <dt>Tracking</dt><dd>{lock.object_visible ? 'live detection' : 'hand locked'}</dd>
+              </dl>
+            )) : <p className="empty-row">No active interaction locks</p>}
+          </section>
+
+          <section>
+            <div className="section-heading"><span>07</span><h2>Last event</h2></div>
             <dl>
               <dt>Type</dt><dd>{lastEvent?.event_type ?? 'none'}</dd>
               <dt>Object</dt><dd>{lastEvent?.object_id ?? '—'}</dd>

@@ -95,6 +95,10 @@ class Database:
             ("boat_01", "sailboat", "Boat"),
             ("r2d2_01", "R2-D2_robot", "R2-D2"),
             ("banknote_01", "banknote", "Banknote"),
+            ("bullet_train_nose_01", "bullet train nose", "Bullet train nose"),
+            ("paintbrush_01", "paint brush", "Paintbrush"),
+            ("stapler_01", "blue stapler", "Stapler"),
+            ("lightbulb_01", "glass bulb with metal base", "Lightbulb"),
         )
         with self.connection() as connection:
             connection.executemany(

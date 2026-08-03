@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -120,6 +121,13 @@ class DwellProgress(BaseModel):
     progress: float
 
 
+class InteractionLock(BaseModel):
+    object_id: str
+    handedness: str
+    status: Literal["live", "hand_locked", "activated"]
+    object_visible: bool
+
+
 class VisionEvent(BaseModel):
     event_type: str
     timestamp: float
@@ -129,3 +137,4 @@ class VisionEvent(BaseModel):
     hands: list[HandDetection] = Field(default_factory=list)
     objects: list[ObjectDetection] = Field(default_factory=list)
     dwells: list[DwellProgress] = Field(default_factory=list)
+    locks: list[InteractionLock] = Field(default_factory=list)

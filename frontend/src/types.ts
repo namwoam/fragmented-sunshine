@@ -59,4 +59,10 @@ export type VisionEvent = {
     remaining_seconds: number
     progress: number
   }>
+  locks: Array<{
+    object_id: string
+    handedness: 'left' | 'right'
+    status: 'live' | 'hand_locked' | 'activated'
+    object_visible: boolean
+  }>
 }

@@ -187,6 +187,13 @@ def draw_preview(frame, hands: list[dict], objects: list[dict]) -> None:
     default=3.0,
     show_default=True,
 )
+@click.option(
+    "--object-memory-seconds",
+    type=click.FloatRange(min=0, min_open=True),
+    envvar="VISION_OBJECT_MEMORY_SECONDS",
+    default=30.0,
+    show_default=True,
+)
 @click.option("--preview", is_flag=True)
 def main(
     camera: str | int,
@@ -199,9 +206,10 @@ def main(
     jpeg_quality: int,
     preview_quality: int,
     dwell_seconds: float,
+    object_memory_seconds: float,
     preview: bool,
 ) -> None:
-    interactions = InteractionStateManager(dwell_seconds)
+    interactions = InteractionStateManager(dwell_seconds, object_memory_seconds)
     registrations = RegisteredObjects(api)
     tray_capture = cv2.VideoCapture(camera)
     tray_capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -269,6 +277,7 @@ def main(
                         "hands": hands,
                         "objects": objects,
                         "dwells": interactions.progress(timestamp),
+                        "locks": interactions.locks(),
                     },
                 )
                 if recording_capture is not None:
@@ -284,7 +293,16 @@ def main(
                             },
                         )
                 for event in events:
-                    publish(client, api, {**event, "hands": hands, "objects": objects})
+                    publish(
+                        client,
+                        api,
+                        {
+                            **event,
+                            "hands": hands,
+                            "objects": objects,
+                            "locks": interactions.locks(),
+                        },
+                    )
                 if preview:
                     draw_preview(frame, hands, objects)
                     if cv2.waitKey(1) & 0xFF == ord("q"):
