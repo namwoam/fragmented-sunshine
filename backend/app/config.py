@@ -24,6 +24,6 @@ def get_settings() -> Settings:
         database_path=data_dir / "fragmented_sunshine.db",
         cors_origins=tuple(origin.strip() for origin in origins if origin.strip()),
         gemini_api_key=os.getenv("GEMINI_API_KEY"),
-        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-        asr_model=os.getenv("ASR_MODEL", os.getenv("GEMINI_MODEL", "gemini-2.5-flash")),
+        gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+        asr_model=os.getenv("ASR_MODEL", os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")),
     )

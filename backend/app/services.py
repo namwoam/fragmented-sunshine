@@ -33,7 +33,7 @@ class ProcessingService:
         database: Database,
         data_dir: Path,
         gemini_api_key: str | None = None,
-        gemini_model: str = "gemini-2.5-flash",
+        gemini_model: str = "gemini-3.5-flash-lite",
         asr_model: str | None = None,
     ):
         self.database = database

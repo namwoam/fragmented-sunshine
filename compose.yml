@@ -7,7 +7,7 @@ services:
       FRAGMENTED_SUNSHINE_DATA_DIR: /data
       CORS_ORIGINS: http://localhost:8080
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
       HAND_LANDMARKER_MODEL: /data/models/hand_landmarker.task
       YOLO_MODEL: ${YOLO_MODEL:-yolo11n.pt}
       VISION_OBJECT_MAP: '${VISION_OBJECT_MAP:-}'
