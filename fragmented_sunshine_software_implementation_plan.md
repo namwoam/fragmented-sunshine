@@ -12,9 +12,9 @@ The system should:
 3. Record video and audio when an object is picked up with the left hand.
 4. Replay the associated audiovisual memory when the same object is picked up with the right hand.
 5. Transcribe recorded speech into timestamped segments.
-6. Re-edit the playback timeline over repeated interactions by rearranging recognizable speech segments.
+6. Re-edit each playback timeline by randomly rearranging recognizable speech segments.
 
-The system does **not** delete recordings immediately. Instead, it progressively changes the temporal order of recorded speech while preserving recognizable fragments.
+The system does **not** delete recordings immediately. Instead, it changes the temporal order of recorded speech while preserving recognizable fragments.
 
 ---
 
@@ -38,7 +38,7 @@ The system does **not** delete recordings immediately. Instead, it progressively
 | Pick up an object with the left hand | Start simultaneous video and audio recording |
 | Return the object to the tray | Stop recording and upload the media |
 | Pick up an object with the right hand | Retrieve and replay the associated recording |
-| Repeated right-hand retrievals | Replay a progressively re-edited timeline |
+| Repeated right-hand retrievals | Replay a freshly shuffled timeline |
 
 ---
 
@@ -290,47 +290,31 @@ For more reliable cutting, re-encode the output if keyframe alignment causes vis
 
 ### 5.5 Timeline Re-editing Strategy
 
-The system should preserve recognizable speech fragments while progressively modifying their order.
+The system should preserve recognizable speech fragments while randomly shuffling their order for each playback request.
 
-**Initial playback:**
-
-```text
-1 -> 2 -> 3 -> 4
-```
-
-**Later playback:**
-
-```text
-1 -> 3 -> 2 -> 4
-```
-
-**Further playback:**
+**Example playback:**
 
 ```text
 3 -> 1 -> 4 -> 2
 ```
 
-The re-editing function should gradually increase temporal disruption based on replay count.
+**Another playback:**
+
+```text
+2 -> 4 -> 1 -> 3
+```
+
+The re-editing function should produce a fresh full permutation for each playback request.
 
 ```python
-def reorder_segments(segment_ids, replay_count):
+def reorder_segments(segment_ids):
     """
-    Return a progressively modified segment order.
-    Early replays should remain close to the original sequence.
-    Later replays may apply more swaps while keeping all segments recognizable.
+    Return a randomly shuffled segment order while preserving every segment.
+    Avoid returning the original order when multiple segments are available.
     """
 ```
 
-**Recommended rules:**
-
-| Replay count | Rearrangement intensity |
-|---|---|
-| 1 | Original order |
-| 2–3 | Swap one adjacent pair |
-| 4–6 | Swap multiple pairs |
-| 7+ | Apply broader reordering while retaining all segments |
-
-Avoid random reordering on every frame or aggressive visual distortion. The intended effect is temporal rearrangement, not visual noise.
+Shuffle once when a playback timeline is requested, not on every video frame. Keep every segment exactly once and avoid aggressive visual distortion. The intended effect is temporal rearrangement, not visual noise.
 
 ---
 
@@ -501,7 +485,7 @@ played_at
 | Left hand lifts registered object | Recording starts |
 | Object returns to tray | Recording stops and uploads |
 | Right hand lifts registered object | Playback begins |
-| Same object is replayed multiple times | Timeline order changes progressively |
+| Same object is replayed multiple times | A fresh shuffled timeline is returned |
 | User speaks Mandarin with English words | Transcript preserves mixed-language speech |
 | Server temporarily disconnects | Client caches media and retries upload |
 
@@ -548,10 +532,8 @@ Because recordings may contain emotionally sensitive material:
 ## 11. Open Questions
 
 - Should each object store only one reflection or a history of reflections?
-- How quickly should the timeline become disordered?
-- Should rearrangement be deterministic or partially randomized?
+- How should shuffle intensity affect recognizability?
 - Should users be able to recover the original recording?
-- Should timeline transformations happen after a fixed number of replays or gradually over time?
 - How should the installation handle multiple similar objects?
 - Which parts of the pipeline must remain local for privacy-sensitive deployments?
 
@@ -566,8 +548,5 @@ For a short paper demonstration, the minimum viable system should support:
 3. Concurrent video and audio capture.
 4. Timestamped Traditional Chinese transcription.
 5. Sentence-level segmentation.
-6. At least three playback states:
-   - original timeline;
-   - lightly rearranged timeline;
-   - more strongly rearranged timeline.
+6. Fresh randomized timelines across repeated playback requests.
 7. A local fallback mode using preprocessed recordings if the remote server is unavailable.
