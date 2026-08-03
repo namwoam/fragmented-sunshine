@@ -31,6 +31,10 @@ def test_objects_are_seeded(tmp_path):
             "boat_01",
             "r2d2_01",
             "banknote_01",
+            "bullet_train_nose_01",
+            "paintbrush_01",
+            "stapler_01",
+            "lightbulb_01",
         }
         assert (
             next(item["class_name"] for item in response.json() if item["object_id"] == "boat_01")
@@ -126,6 +130,8 @@ def test_recording_process_and_playback_flow(tmp_path, monkeypatch):
         assert playback.status_code == 200
         assert playback.json()["replay_count"] == 1
         assert len(playback.json()["timeline"]) == 2
+        original_timeline = [segment["segment_id"] for segment in playback.json()["segments"]]
+        assert playback.json()["timeline"] != original_timeline
 
         event = client.post(
             "/api/objects/perfume_01/playback-events",
@@ -140,7 +146,7 @@ def test_recording_process_and_playback_flow(tmp_path, monkeypatch):
         next_playback = client.get("/api/objects/perfume_01/playback")
         assert next_playback.status_code == 200
         assert next_playback.json()["replay_count"] == 2
-        assert next_playback.json()["timeline"] != playback.json()["timeline"]
+        assert sorted(next_playback.json()["timeline"]) == sorted(playback.json()["timeline"])
 
 
 def test_vision_event_is_forwarded_over_websocket(tmp_path):
@@ -155,10 +161,27 @@ def test_vision_event_is_forwarded_over_websocket(tmp_path):
                 "handedness": "left",
                 "hands": [],
                 "objects": [],
+                "locks": [
+                    {
+                        "object_id": "perfume_01",
+                        "handedness": "left",
+                        "status": "activated",
+                        "object_visible": False,
+                    }
+                ],
             },
         )
         assert response.status_code == 202
-        assert websocket.receive_json()["event_type"] == "object_activated"
+        event = websocket.receive_json()
+        assert event["event_type"] == "object_activated"
+        assert event["locks"] == [
+            {
+                "object_id": "perfume_01",
+                "handedness": "left",
+                "status": "activated",
+                "object_visible": False,
+            }
+        ]
 
 
 def test_recording_camera_frame_is_forwarded_over_websocket(tmp_path):
