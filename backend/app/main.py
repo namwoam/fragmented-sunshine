@@ -359,7 +359,7 @@ def get_playback(object_id: str):
         ).fetchone()[0]
     replay_count = event_count + 1
     serialized = [serialize_segment(segment) for segment in segments]
-    timeline = reorder_segments([segment["segment_id"] for segment in serialized], replay_count)
+    timeline = reorder_segments([segment["segment_id"] for segment in serialized])
     return {
         "object_id": object_id,
         "recording_id": recording["recording_id"],

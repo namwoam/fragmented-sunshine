@@ -5,21 +5,29 @@ from app.timeline import reorder_segments
 pytestmark = pytest.mark.unit
 
 
-def test_first_replay_keeps_original_order():
+def test_playback_uses_random_shuffle(monkeypatch):
     segments = ["one", "two", "three", "four"]
-    assert reorder_segments(segments, 1) == segments
+    monkeypatch.setattr("app.timeline.random.shuffle", lambda items: items.reverse())
+
+    assert reorder_segments(segments) == ["four", "three", "two", "one"]
+    assert segments == ["one", "two", "three", "four"]
 
 
-def test_early_replay_swaps_one_adjacent_pair():
+def test_shuffle_keeps_every_segment_exactly_once():
     segments = ["one", "two", "three", "four"]
-    changed = reorder_segments(segments, 2)
-    differing = [index for index, value in enumerate(changed) if value != segments[index]]
-    assert len(differing) == 2
-    assert differing[1] - differing[0] == 1
+
+    changed = reorder_segments(segments)
+
+    assert changed != segments
     assert sorted(changed) == sorted(segments)
 
 
-def test_later_replay_is_deterministic_and_keeps_every_segment():
+def test_unchanged_random_result_rotates_to_avoid_original_order(monkeypatch):
     segments = ["one", "two", "three", "four"]
-    assert reorder_segments(segments, 8) == reorder_segments(segments, 8)
-    assert sorted(reorder_segments(segments, 8)) == sorted(segments)
+    monkeypatch.setattr("app.timeline.random.shuffle", lambda _: None)
+
+    assert reorder_segments(segments) == ["two", "three", "four", "one"]
+
+
+def test_single_segment_remains_unchanged():
+    assert reorder_segments(["one"]) == ["one"]
