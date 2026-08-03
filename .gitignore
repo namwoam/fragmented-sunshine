@@ -15,6 +15,13 @@ frontend/dist/
 frontend/vite.config.js
 frontend/vite.config.d.ts
 
+# Local generated media-processing artifacts
+/base_cutted.mp4
+/base_processed.mp4
+/base_processed_reorder.json
+/segments.json
+/transcript.json
+
 .env
 
 # Byte-compiled / optimized / DLL files
